@@ -13,23 +13,18 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.implicits._
 import org.http4s.server.Router
 
-// will become a class when we can inject the business logic
-object CatalogRoutes {
+class CatalogRoutes[F[_]: Concurrent] extends Http4sDsl[F] {
 
   // add, get, update (including archive) books
   // get all by genre (paginated, should I use stream and leave the connection open?)
   // get all by author
   // full text search on title/genre/summary
 
-  def genreRoutes[F[_]: Concurrent](genres: Genres[F]): HttpRoutes[F] = {
-    val dsl = new Http4sDsl[F] {}
-    import dsl._
+  def genreRoutes(genres: Genres[F]): HttpRoutes[F] = {
     HttpRoutes.of {
-      case GET -> Root / "all" =>
-        genres.getAll.flatMap(Ok(_))
+      case GET -> Root / "all" => Ok(genres.getAll)
 
-      case GET -> Root / genre =>
-        genres.get(genre).flatMap(Ok(_))
+      case GET -> Root / genre => Ok(genres.get(genre))
 
       case req @ POST -> Root / genre =>
         for {
@@ -40,9 +35,7 @@ object CatalogRoutes {
     }
   }
 
-  def authorRoutes[F[_]: Concurrent](authors: Authors[F]): HttpRoutes[F] = {
-    val dsl = new Http4sDsl[F] {}
-    import dsl._
+  def authorRoutes(authors: Authors[F]): HttpRoutes[F] = {
     HttpRoutes.of { case GET -> Root / "all" =>
       authors.getAll.flatMap(Ok(_))
     }
@@ -50,10 +43,10 @@ object CatalogRoutes {
 
   // book routes here
 
-  def routes[F[_]: Concurrent](genres: Genres[F], authors: Authors[F]): HttpRoutes[F] =
+  def routes(genres: Genres[F], authors: Authors[F]): HttpRoutes[F] =
     Router(
-      ("genre", genreRoutes(genres)),
-      ("author", authorRoutes(authors))
+      "genre" -> genreRoutes(genres),
+      "author" -> authorRoutes(authors)
     )
 
 }

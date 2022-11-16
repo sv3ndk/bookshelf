@@ -27,7 +27,7 @@ object Genres {
     Resource.make(
       // TODO: should use PostGres and Doobie instead
       EffectMap
-        .make[F, String, Genre]
+        .make[F, String, Genre]()
         .map { state =>
           new Genres[F] {
             def getAll: F[List[Genre]] = state.getAllValues
@@ -47,7 +47,7 @@ object Authors {
     Resource.make(
       // TODO: should use Postgres and Doobie instead
       EffectMap
-        .make[F, String, Author]
+        .make[F, String, Author]()
         .map { state =>
           new Authors[F] {
             def getAll: F[List[Author]] = state.getAllValues

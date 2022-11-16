@@ -16,9 +16,9 @@ trait EffectMap[F[_], K, V] {
 }
 
 object EffectMap {
-  def make[F[_]: MonadThrow: Ref.Make, K, V]: F[EffectMap[F, K, V]] = {
+  def make[F[_]: MonadThrow: Ref.Make, K, V](init: Map[K, V] = Map.empty[K, V]): F[EffectMap[F, K, V]] = {
     Ref
-      .ofEffect[F, Map[K, V]](Map.empty.pure[F])
+      .ofEffect[F, Map[K, V]](init.pure[F])
       .map { state =>
         new EffectMap[F, K, V] {
           def getAll: F[List[(K, V)]] = state.get.map(_.toList)

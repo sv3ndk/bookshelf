@@ -25,7 +25,7 @@ object BookshelfServer {
     httpApp = Router
       .of(
         // ("joke", BikeconfiguratorRoutes.jokeRoutes[F](jokeAlg)),
-        ("catalog", CatalogRoutes.routes[F](genres, authors))
+        "catalog" -> new CatalogRoutes[F].routes(genres, authors)
       )
       .orNotFound
 
