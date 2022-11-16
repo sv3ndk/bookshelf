@@ -2,5 +2,7 @@
 *.jar
 target/
 .bloop/
+.metals/
 .bsp/
-
+.vscode/
+.history/
