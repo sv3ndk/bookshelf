@@ -15,8 +15,8 @@ import eu.timepit.refined.string._
 import eu.timepit.refined.boolean._
 import eu.timepit.refined.generic._
 import eu.timepit.refined.api.Validate
-import bookshelf.util.refined
-import bookshelf.util.refined.ToDetailedValidationErr
+import bookshelf.util.validation
+import bookshelf.util.validation.ToDetailedValidationErr
 
 // TODO: split between edge model and domain model
 // TODO: use refined types and cats Validated data type
@@ -38,17 +38,21 @@ trait Genres[F[_]] {
 
 object Genres {
 
-  implicit val NonEmptyErr =
-    ToDetailedValidationErr.forRefined[NonEmpty]("should not be empty")
+  type GenreNameConstraint = NonEmpty
+  type GenreName = String Refined GenreNameConstraint
 
-  type GenreName = String Refined NonEmpty
-  type GenreDescription = String Refined NonEmpty
+  type GenreDescriptionConstraint = NonEmpty
+  type GenreDescription = String Refined GenreDescriptionConstraint
 
-  case class Genre(name: GenreName, genreDescription: GenreDescription)
+  case class Genre(name: GenreName, description: GenreDescription)
 
   type SomethingElse = Int Refined MinSize[3]
   implicit val IgnoredFriendlyError =
     ToDetailedValidationErr.forRefined[MinSize[3]]("Should be larger than 3")
+
+  type SomethingElse2 = String Refined MinSize[3]
+  implicit val IgnoredFriendlyError2 =
+    ToDetailedValidationErr.forRefined[MinSize[3]]("Should be larger than 3 bis")
 
   def make[F[_]: Concurrent]: F[Genres[F]] =
     // TODO: should use PostGres and Doobie instead

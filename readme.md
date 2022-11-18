@@ -36,9 +36,23 @@ Use cases:
   * flag comments as problematic
   * add ratings to books
 
-services:
-
+domains:
   * catalog: handling of the book catalog available on the site, including search
   * shelve: allow users to manage their bookshelves
   * session: login, logout
   * social: comments, rating, moderation
+
+
+
+Lessons learnt:
+
+* this combinasion of imports conjures up automatic json decoding/encoding from/to case class while using refined types
+
+```scala
+import eu.timepit.refined._
+import io.circe.generic.auto._
+import io.circe.refined._
+import org.http4s.circe.CirceEntityCodec._
+```
+
+* error handling in http4s can either be specifically in each route, or else for repetitive stuff we can let the `MessageFailure` "bubbleUp" and use a middleware to transform it. I crafted a middleware that returns quite a verbose message, it's probably not the most secure option.
