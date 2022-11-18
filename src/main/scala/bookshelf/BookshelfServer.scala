@@ -2,6 +2,7 @@ package bookshelf
 
 import cats.effect.{Async, Resource}
 import cats.syntax.all._
+// import cats.syntax.applicative._
 import com.comcast.ip4s._
 import fs2.Stream
 import org.http4s.ember.client.EmberClientBuilder
@@ -19,8 +20,8 @@ object BookshelfServer {
   def bikeApp[F[_]: Async]: Resource[F, HttpApp[F]] = for {
     client <- EmberClientBuilder.default[F].build
     // jokeAlg = Jokes.impl[F](client
-    genres <- Genres.make[F]
-    authors <- Authors.make[F]
+    genres <- Resource.eval(Genres.make[F])
+    authors <- Resource.eval(Authors.make[F])
 
     httpApp = Router
       .of(

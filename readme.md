@@ -2,6 +2,12 @@
 
 Toy application to handle books and bookshelves, as an excuse to play with Typelevel Cats eco-system.
 
+Tech stack:
+
+* core: cats and cats-effect
+* rest API: http4s
+* data validation: Frank Thomas refined types
+* unit-tests: munit and scalacheck
 
 
 Use cases:
