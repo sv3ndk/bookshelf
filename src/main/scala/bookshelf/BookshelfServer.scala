@@ -2,7 +2,7 @@ package bookshelf
 
 import bookshelf.catalog.Authors
 import bookshelf.catalog.CatalogRoutes
-import bookshelf.catalog.Genres
+import bookshelf.catalog.Categories
 import bookshelf.util.validation._
 import cats.effect.Async
 import cats.effect.Resource
@@ -25,19 +25,21 @@ import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.middleware.ErrorHandling
 import org.http4s.server.middleware.Logger
+import bookshelf.catalog.Books
 
 object BookshelfServer {
 
   def bookshelfApp[F[_]: Async]: Resource[F, HttpApp[F]] = for {
     client <- EmberClientBuilder.default[F].build
     // jokeAlg = Jokes.impl[F](client
-    genres <- Resource.eval(Genres.make[F])
+    genres <- Resource.eval(Categories.make[F])
     authors <- Resource.eval(Authors.make[F])
+    books <- Resource.eval(Books.make[F])
 
     httpApp = Router
       .of(
         // ("joke", BikeconfiguratorRoutes.jokeRoutes[F](jokeAlg)),
-        "catalog" -> new CatalogRoutes[F].routes(genres, authors)
+        "catalog" -> new CatalogRoutes[F].routes(genres, authors, books)
       )
       .orNotFound
 

@@ -1,78 +1,73 @@
 package bookshelf.catalog
 
 import bookshelf.util.effect.EffectMap
+import bookshelf.util.validation
+import bookshelf.util.validation.AsDetailedValidationError
 import cats.MonadThrow
 import cats.effect.Concurrent
 import cats.effect.IO
+import cats.effect.Ref
 import cats.effect.kernel.Resource
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
-import eu.timepit.refined.collection._
-import eu.timepit.refined.string._
-import eu.timepit.refined.boolean._
-import eu.timepit.refined.generic._
 import eu.timepit.refined.api.Validate
-import bookshelf.util.validation
-import bookshelf.util.validation.ToDetailedValidationErr
+import eu.timepit.refined.boolean._
+import eu.timepit.refined.collection._
+import eu.timepit.refined.generic._
+import eu.timepit.refined.numeric._
+import eu.timepit.refined.string._
 
-// TODO: split between edge model and domain model
-// TODO: use refined types and cats Validated data type
-case class Book(
-    title: String,
-    author: Author,
-    publicationDate: Long,
-    genres: List[Genres.Genre],
-    summary: Option[String]
-)
-case class Author(firstName: String, lastName: String)
-
-//
-trait Genres[F[_]] {
-  def getAll: F[List[Genres.Genre]]
-  def get(name: Genres.GenreName): F[Option[Genres.Genre]]
-  def add(genre: Genres.Genre): F[Genres.GenreName]
+trait Categories[F[_]] {
+  def getAll: F[List[Categories.Category]]
+  def get(name: Categories.CategoryName): F[Option[Categories.Category]]
+  def add(genre: Categories.Category): F[Categories.CategoryName]
 }
 
-object Genres {
+object Categories {
 
-  type GenreNameConstraint = NonEmpty
-  type GenreName = String Refined GenreNameConstraint
+  type CategoryId = String Refined Uuid
+  type CategoryName = String Refined NonEmpty
+  type CategoryDescription = String Refined NonEmpty
+  case class Category(id: CategoryId, name: CategoryName, description: CategoryDescription)
 
-  type GenreDescriptionConstraint = NonEmpty
-  type GenreDescription = String Refined GenreDescriptionConstraint
-
-  case class Genre(name: GenreName, description: GenreDescription)
+  type FooYear = Int Refined Positive
+  implicit val NonPositiveErr = AsDetailedValidationError.forPredicate[Positive]("should positive")
 
   type SomethingElse = Int Refined MinSize[3]
   implicit val IgnoredFriendlyError =
-    ToDetailedValidationErr.forRefined[MinSize[3]]("Should be larger than 3")
+    AsDetailedValidationError.forPredicate[MinSize[3]]("Should be larger than 3")
 
   type SomethingElse2 = String Refined MinSize[3]
   implicit val IgnoredFriendlyError2 =
-    ToDetailedValidationErr.forRefined[MinSize[3]]("Should be larger than 3 bis")
+    AsDetailedValidationError.forPredicate[MinSize[3]]("Should be larger than 3 bis")
 
-  def make[F[_]: Concurrent]: F[Genres[F]] =
-    // TODO: should use PostGres and Doobie instead
+  def make[F[_]: Concurrent]: F[Categories[F]] =
+    // TODO: replace this with usage of PostGres and Doobie
     EffectMap
-      .make[F, GenreName, Genre]()
+      .make[F, CategoryName, Category]()
       .map { state =>
-        new Genres[F] {
-          def getAll: F[List[Genre]] = state.getAllValues
-          def get(name: GenreName): F[Option[Genre]] = state.get(name)
-          def add(genre: Genre): F[GenreName] = state.add(genre.name, genre)
+        new Categories[F] {
+          def getAll: F[List[Category]] = state.getAllValues
+          def get(name: CategoryName): F[Option[Category]] = state.get(name)
+          def add(category: Category): F[CategoryName] = state.add(category.name, category)
         }
       }
 }
 
 trait Authors[F[_]] {
-  def getAll: F[List[Author]]
+  def getAll: F[List[Authors.Author]]
+
 }
 
 object Authors {
-  def make[F[_]: Concurrent]: F[Authors[F]] = {
+
+  type AuthorId = String Refined Uuid
+  case class Author(firstName: String, lastName: String)
+
+  def make[F[_]: MonadThrow: Ref.Make]: F[Authors[F]] = {
     // TODO: should use Postgres and Doobie instead
     EffectMap
       .make[F, String, Author]()
@@ -82,4 +77,41 @@ object Authors {
         }
       }
   }
+}
+
+trait Books[F[_]] {
+  def add(book: Books.Book): F[Books.BookId]
+  def get(id: Books.BookId): F[Option[Books.Book]]
+}
+
+object Books {
+
+  type BookId = String Refined Uuid
+  type BookTitle = String Refined NonEmpty
+  type BookPublicationYear = Int Refined And[Greater[1800], Less[2200]]
+  implicit val InvalidPublicationYear =
+    AsDetailedValidationError.forPredicate[And[Greater[1800], Less[2200]]]("should be a year in [1800, 2200]")
+
+  type BookSummary = String
+  case class Book(
+      id: BookId,
+      title: BookTitle,
+      authorId: Authors.AuthorId,
+      publicationYear: BookPublicationYear,
+      categories: List[Categories.CategoryId],
+      summary: String
+  )
+
+  def make[F[_]: MonadThrow: Ref.Make]: F[Books[F]] = {
+    // TODO: should use Postgres and Doobie instead
+    EffectMap
+      .make[F, BookId, Book]()
+      .map { state =>
+        new Books[F] {
+          def add(book: Book) = state.add(book.id, book)
+          def get(id: BookId) = state.get(id)
+        }
+      }
+  }
+
 }

@@ -2,7 +2,7 @@ package bookshelf.catalog
 
 import bookshelf.BookshelfServer
 import bookshelf.catalog.CatalogRoutes
-import bookshelf.catalog.Genres
+import bookshelf.catalog.Categories
 import bookshelf.util.TestUtils
 import bookshelf.util.effect.EffectMap
 import cats.effect.IO
@@ -12,6 +12,7 @@ import eu.timepit.refined.api.RefType
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.api.Validate
 import eu.timepit.refined.collection.NonEmpty
+import eu.timepit.refined.string.Uuid
 import eu.timepit.refined.collection._
 import io.circe.Json
 import io.circe.generic.auto._
@@ -47,14 +48,15 @@ class WebAppSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSui
     }
   }
 
-  test("mini integration test: posting then retrieving a book genre should work") {
+  test("mini integration test: posting then retrieving a book category should work") {
     testViaApp(client => {
-      val novelGenre = Refined.unsafeApply[String, NonEmpty]("novel")
+      val id = Refined.unsafeApply[String, Uuid]("064617f2-acb0-4db6-a142-04366f3b5ad7")
+      val name = Refined.unsafeApply[String, NonEmpty]("novel")
       val description = Refined.unsafeApply[String, NonEmpty]("bla bla bla")
-      val createdGenre = Genres.Genre(novelGenre, description)
+      val createdGenre = Categories.Category(id, name, description)
       for {
-        genreId <- client.expect[String](Method.POST(createdGenre.asJson, uri"/catalog/genre"))
-        readGenre = client.expect[Genres.Genre](uri"/catalog/genre?name=novel")
+        genreId <- client.expect[String](Method.POST(createdGenre.asJson, uri"/catalog/category"))
+        readGenre = client.expect[Categories.Category](uri"/catalog/category?name=novel")
         result <- assertIO(readGenre, createdGenre)
       } yield result
     })

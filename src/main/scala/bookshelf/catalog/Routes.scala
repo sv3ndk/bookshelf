@@ -6,6 +6,7 @@ import cats.FlatMap
 import cats.MonadError
 import cats.MonadThrow
 import cats.data.NonEmptyList
+import cats.data.Validated
 import cats.data.Validated.Invalid
 import cats.data.Validated.Valid
 import cats.data.ValidatedNel
@@ -28,57 +29,103 @@ import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 
-import Genres._
+import CatalogRoutes._
+import bookshelf.util.validation.CommonErrorMessages._
 
 class CatalogRoutes[F[_]: Concurrent: MonadThrow] extends Http4sDsl[F] {
-  import CatalogRoutes._
 
   // add, get, update (including archive) books
   // get all by genre (paginated, should I use stream and leave the connection open?)
   // get all by author
   // full text search on title/genre/summary
 
-  def genreRoutes(genres: Genres[F]): HttpRoutes[F] = {
+  def categoryRoutes(categories: Categories[F]): HttpRoutes[F] = {
 
-    object GenreQueryParamMatcher extends NamedValidatingQueryParamDecoderMatcher[GenreName]("name")
+    import Categories._
+
+    object NameQueryParamMatcher extends NamedQueryParamDecoderMatcher[CategoryName]("name")
 
     HttpRoutes.of {
-      case GET -> Root / "all" => Ok(genres.getAll)
+      case GET -> Root / "all" => Ok(categories.getAll)
 
-      case GET -> Root :? GenreQueryParamMatcher(maybeGenre) =>
-        validParam(maybeGenre).flatMap(genre => Ok(genres.get(genre)))
+      // TODO: we should get a category by id instead
+      case GET -> Root :? NameQueryParamMatcher(nameParam) =>
+        validParam(nameParam)
+          .flatMap(category => categories.get(category))
+          .flatMap(Ok(_))
 
       // TODO: this action should require authentication
       case req @ POST -> Root =>
-        for {
-          wGenre <- req.as[WGenre]
-          genre <- validBody(wGenre.asDomain)
-          response <- genres.add(genre).flatMap(Ok(_))
-        } yield response
+        req
+          .as[RawCategory]
+          .flatMap(raw => validBody(raw.asDomain))
+          .flatMap(cat => categories.add(cat))
+          .flatMap(Ok(_))
     }
   }
 
   def authorRoutes(authors: Authors[F]): HttpRoutes[F] = {
     HttpRoutes.of { case GET -> Root / "all" =>
-      authors.getAll.flatMap(Ok(_))
+      authors.getAll
+        .flatMap(Ok(_))
     }
   }
 
-  // book routes here
+  def bookRoutes(books: Books[F]): HttpRoutes[F] = {
 
-  def routes(genres: Genres[F], authors: Authors[F]): HttpRoutes[F] =
+    object IdQueryParamMatcher extends NamedQueryParamDecoderMatcher[Books.BookId]("id")
+
+    HttpRoutes.of {
+
+      case GET -> Root :? IdQueryParamMatcher(idParam) =>
+        validParam(idParam)
+          .flatMap(id => books.get(id))
+          .flatMap(Ok(_))
+
+      case req @ POST -> Root =>
+        req
+          .as[RawBook]
+          .flatMap(raw => validBody(raw.asDomain))
+          .flatMap(book => books.add(book))
+          .flatMap(Ok(_))
+    }
+  }
+
+  def routes(genres: Categories[F], authors: Authors[F], books: Books[F]): HttpRoutes[F] =
     Router(
-      "genre" -> genreRoutes(genres),
-      "author" -> authorRoutes(authors)
+      "category" -> categoryRoutes(genres),
+      "author" -> authorRoutes(authors),
+      "book" -> bookRoutes(books)
     )
 }
 
 object CatalogRoutes {
-  case class WGenre(name: String, description: String) {
-    def asDomain: ValidatedNel[DetailedValidationErr, Genre] = (
-      refineVDetailed[String, GenreNameConstraint](name, "genreName").toValidatedNel,
-      refineVDetailed[String, GenreDescriptionConstraint](description, "description").toValidatedNel
-    ).mapN(Genre)
+  import Categories._
+  case class RawCategory(id: String, name: String, description: String) {
+    def asDomain: ValidatedNel[DetailedValidationErr, Category] = (
+      refineVDetailed[CategoryId](id, "id").toValidatedNel,
+      refineVDetailed[CategoryName](name, "name").toValidatedNel,
+      refineVDetailed[CategoryDescription](description, "description").toValidatedNel
+    ).mapN(Category)
+  }
+
+  import Books._
+  case class RawBook(
+      id: String,
+      title: String,
+      authorId: String,
+      publicationYear: Int,
+      categories: List[String],
+      summary: String
+  ) {
+    def asDomain: ValidatedNel[DetailedValidationErr, Books.Book] = (
+      refineVDetailed[Books.BookId](id, "id").toValidatedNel,
+      refineVDetailed[Books.BookTitle](title, "title").toValidatedNel,
+      refineVDetailed[Authors.AuthorId](authorId, "authorId").toValidatedNel,
+      refineVDetailed[Books.BookPublicationYear](publicationYear, "publicationYear").toValidatedNel,
+      categories.traverse(category => refineVDetailed[CategoryId](category, "categories").toValidatedNel),
+      Validated.validNel[DetailedValidationErr, String](summary)
+    ).mapN(Book)
   }
 
 }

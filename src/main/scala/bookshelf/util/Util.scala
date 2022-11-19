@@ -13,6 +13,7 @@ import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.api.Validate
 import eu.timepit.refined.collection._
+import eu.timepit.refined.string._
 import org.http4s.EntityEncoder
 import org.http4s.HttpVersion
 import org.http4s.InvalidMessageBodyFailure
@@ -55,53 +56,81 @@ object effect {
 
 object validation {
 
-  // some common human-friendly validation errors
-  implicit val NonEmptyErr = ToDetailedValidationErr.forRefined[NonEmpty]("should not be empty")
+  object CommonErrorMessages {
+    implicit val InvalidUuid = AsDetailedValidationError.forPredicate[Uuid]("is not a valid UUID")
+    implicit val UnexpectedlyEmpty = AsDetailedValidationError.forPredicate[NonEmpty]("should not be empty")
+  }
 
   case class DetailedValidationErr(technicalMsg: String, humanMsg: String)
 
   // provider of a detailed error for predicate P given some String technical error
-  trait ToDetailedValidationErr[P] {
+  trait AsDetailedValidationError[P] {
     def apply(paramName: String, technicalMsg: String): DetailedValidationErr
   }
 
-  object ToDetailedValidationErr {
-    def forRefined[P](humanMsg: String): ToDetailedValidationErr[P] =
+  // decorates a Refined Predicate P with a human-friendly error description
+  object AsDetailedValidationError {
+    def forPredicate[P](humanMsg: String): AsDetailedValidationError[P] =
       (maybeParameName, technical) => {
         val prefix = if (maybeParameName.isEmpty) "" else s" $maybeParameName "
         DetailedValidationErr(prefix + technical, prefix + humanMsg)
       }
   }
 
-  // custom version of refined refineV(), using our converter to add details to the validation error
-  def refineVDetailed[T, P](value: T, name: String = "")(implicit
-      v: Validate[T, P],
-      toDetailedErr: ToDetailedValidationErr[P]
-  ): Either[DetailedValidationErr, Refined[T, P]] =
-    refineV(value).leftMap(technical => toDetailedErr(name, technical))
+  // Custom version of refined refineV(), with 3 updates:
+  //  - using our ToDetailedValidationErr to produce detailed error messages
+  //  - optionally, a logical name can be specified to make the error more meaningful
+  //  - is invoked with the target Refined[T, P], which I find more friendly to end-users than P
+  def refineVDetailed[RTP] = new RefinedPartiallyApplied[RTP]
 
-  // derived http4s QueryParamDecoder[Refined[T, P]] based on our custom validation
+  class RefinedPartiallyApplied[RTP] {
+    def apply[T, P](
+        rawValue: T,
+        name: String = ""
+    )(implicit
+        ev: RTP =:= Refined[T, P],
+        v: Validate[T, P],
+        toDetailedErr: AsDetailedValidationError[P]
+    ): Either[DetailedValidationErr, Refined[T, P]] = {
+      refineV(rawValue).leftMap(technical => toDetailedErr(name, technical))
+    }
+  }
+
+  // derived http4s QueryParamDecoder[Refined[T, P]] based on some existing QueryParamDecoder[T]
+  // and our custom validation for refined types
   implicit def refinedQueryParamDecoder[T: QueryParamDecoder, P](implicit
       ev: Validate[T, P],
-      toDetailedErr: ToDetailedValidationErr[P]
+      toDetailedErr: AsDetailedValidationError[P]
   ): QueryParamDecoder[T Refined P] = QueryParamDecoder[T]
-    .emap(refineVDetailed(_).leftMap {
+    .emap(refineVDetailed[T Refined P](_).leftMap {
       case DetailedValidationErr(technical, friendly) => { ParseFailure(friendly, technical) }
     })
 
   // essentially just a copy of ValidatingQueryParamDecoderMatcher which adds the param name to the error
-  abstract class NamedValidatingQueryParamDecoderMatcher[T: QueryParamDecoder](name: String) {
-    def unapply(params: Map[String, Seq[String]]): Option[ValidatedNel[ParseFailure, T]] =
-      params.get(name).flatMap(_.headOption).map { s =>
-        QueryParamDecoder[T]
-          .decode(QueryParameterValue(s))
-          .leftMap(failureList =>
-            failureList.map { case ParseFailure(sanitized, details) =>
-              ParseFailure(s"Invalid query param '$name': $sanitized", s"Invalid query param \"$name\": $details")
-            }
-          )
-      }
+  // QP is typially a Refined[T, P], although this matcher is agnostic of that
+  abstract class NamedQueryParamDecoderMatcher[QP: QueryParamDecoder](paramName: String) {
+    def unapply(httpParams: Map[String, Seq[String]]): Option[ValidatedNel[ParseFailure, QP]] =
+      httpParams
+        .get(paramName)
+        .flatMap(_.headOption)
+        .map { paramValue =>
+          QueryParamDecoder[QP]
+            .decode(QueryParameterValue(paramValue))
+            .leftMap(failureList =>
+              failureList.map { parseFailure =>
+                parseFailure.copy(sanitized = s"Invalid query param '$paramName': ${parseFailure.sanitized}")
+              }
+            )
+        }
   }
+
+  def validParam[F[_]: MonadThrow, A](validated: ValidatedNel[ParseFailure, A]): F[A] =
+    validated match {
+      case Validated.Invalid(e) =>
+        val mergedMessage = e.toList.map(_.sanitized).mkString(",")
+        implicitly[MonadThrow[F]].raiseError(ParseFailure(mergedMessage, mergedMessage))
+      case Validated.Valid(genre) => genre.pure[F]
+    }
 
   def validBody[F[_]: MonadThrow, A](validated: ValidatedNel[DetailedValidationErr, A]): F[A] =
     validated match {
@@ -111,11 +140,4 @@ object validation {
       case Validated.Valid(genre) => genre.pure[F]
     }
 
-  def validParam[F[_]: MonadThrow, A](validated: ValidatedNel[ParseFailure, A]): F[A] =
-    validated match {
-      case Validated.Invalid(e) =>
-        val mergedMessage = e.toList.map(_.sanitized).mkString(",")
-        implicitly[MonadThrow[F]].raiseError(ParseFailure(mergedMessage, mergedMessage))
-      case Validated.Valid(genre) => genre.pure[F]
-    }
 }
