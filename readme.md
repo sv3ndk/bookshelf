@@ -58,8 +58,12 @@ import org.http4s.circe.CirceEntityCodec._
 
 * error handling in http4s can either be specifically in each route, or else for repetitive stuff we can let the `MessageFailure` "bubbleUp" and use a middleware to transform it. I crafted a middleware that returns quite a verbose message, it's probably not the most secure option.
 
-* I don't like implicits, they fail in obscure ways when the relevant import is missing
+* I don't like implicits, they fail in obscure ways when the relevant imports are missing
 
 Further notes:
 
-* 2 downsides to my approach for custom error messages: it's based on implicits, and it's prone to overlap: once an error message is associated to a constraint for one meaning (say, a publication year should be > 1800), we cannot define another one error for the same constrain in another context (say, a page count that shoudl also be > 1800 for some reason)
+* 4 downsides to my approach for custom error messages: 
+    * it's based on implicits
+    * I'm returning 400 BadRequest for any error
+    * it's prone to overlap: once an error message is associated to a constraint for one meaning (say, a publication year should be > 1800), we cannot define another one error for the same constrain in another context (say, a page count that shoudl also be > 1800 for some reason)
+    * it doesn't address semantic meaning: 2 types that are equivalent at type level with different semantics (say AuthorId and BookId both being `String Refined Uuid`) can still be passed one instead of the other

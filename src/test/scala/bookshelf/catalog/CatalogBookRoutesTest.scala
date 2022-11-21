@@ -1,9 +1,9 @@
 package bookshelf.catalog
 
 import bookshelf.BookshelfServer
+import bookshelf.catalog.Books._
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
-import bookshelf.catalog.Books._
 import bookshelf.util.TestUtils
 import bookshelf.util.effect.EffectMap
 import cats.effect.IO
@@ -71,7 +71,7 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
     }
   }
 
-  test("invalid book id name query param should yield correct error message") {
+  test("invalid book id query param should yield correct error message") {
     testInvalidBookRequests(
       GET(uri"?id=someinvaliduuid"),
       Status.BadRequest,
@@ -83,7 +83,7 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
     testInvalidBookRequests(
       POST(CatalogRoutes.RawBook("", "", "", 0, List("", ""), ""), uri""),
       Status.BadRequest,
-      "Invalid message body: id is not a valid UUID, title should not be empty, authorId is not a valid UUID, publicationYear should be a year in [1800, 2200], categories is not a valid UUID, categories is not a valid UUID"
+      "id is not a valid UUID, title should not be empty, authorId is not a valid UUID, publicationYear should be a year in [1800, 2200], categories is not a valid UUID, categories is not a valid UUID"
     )
   }
 

@@ -1,14 +1,14 @@
 package bookshelf.util
 
-import cats.syntax.traverse._
-import cats.syntax.functor._
 import cats.effect.IO
-import org.http4s.Response
+import cats.effect.unsafe.IORuntime
+import cats.syntax.functor._
+import cats.syntax.traverse._
+import munit.CatsEffectAssertions
 import org.http4s.EntityDecoder
+import org.http4s.Response
 import org.http4s.Status
 import org.http4s.implicits._
-import munit.CatsEffectAssertions
-import cats.effect.unsafe.IORuntime
 
 trait TestUtils {
 
@@ -37,8 +37,8 @@ trait TestUtils {
   def assertFailedResponse[A](tested: IO[Response[IO]], expectedStatus: Status, expectedBody: String): IO[Unit] =
     assertIO(tested.map(_.status), expectedStatus) *>
       assertIO(
-        tested.flatMap(response => bodyAsText(response.body)),
-        expectedBody
+        tested.flatMap(response => bodyAsText(response.body)).map(_.toString()),
+        expectedBody.toString()
       )
 
   def assertFailedResponse[A](tested: Response[IO], expectedStatus: Status, expectedBody: String): IO[Unit] =

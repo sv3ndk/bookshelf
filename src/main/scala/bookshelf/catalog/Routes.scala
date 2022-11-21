@@ -1,5 +1,6 @@
 package bookshelf.catalog
 
+import bookshelf.util.validation.CommonErrorMessages._
 import bookshelf.util.validation._
 import cats.Applicative
 import cats.FlatMap
@@ -30,7 +31,6 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 
 import CatalogRoutes._
-import bookshelf.util.validation.CommonErrorMessages._
 
 class CatalogRoutes[F[_]: Concurrent: MonadThrow] extends Http4sDsl[F] {
 
@@ -49,8 +49,8 @@ class CatalogRoutes[F[_]: Concurrent: MonadThrow] extends Http4sDsl[F] {
       case GET -> Root / "all" => Ok(categories.getAll)
 
       // TODO: we should get a category by id instead
-      case GET -> Root :? NameQueryParamMatcher(nameParam) =>
-        validParam(nameParam)
+      case GET -> Root :? NameQueryParamMatcher(catParam) =>
+        validated(catParam)
           .flatMap(category => categories.get(category))
           .flatMap(Ok(_))
 
@@ -58,7 +58,7 @@ class CatalogRoutes[F[_]: Concurrent: MonadThrow] extends Http4sDsl[F] {
       case req @ POST -> Root =>
         req
           .as[RawCategory]
-          .flatMap(raw => validBody(raw.asDomain))
+          .flatMap(raw => validated(raw.asDomain))
           .flatMap(cat => categories.add(cat))
           .flatMap(Ok(_))
     }
@@ -78,14 +78,14 @@ class CatalogRoutes[F[_]: Concurrent: MonadThrow] extends Http4sDsl[F] {
     HttpRoutes.of {
 
       case GET -> Root :? IdQueryParamMatcher(idParam) =>
-        validParam(idParam)
+        validated(idParam)
           .flatMap(id => books.get(id))
           .flatMap(Ok(_))
 
       case req @ POST -> Root =>
         req
           .as[RawBook]
-          .flatMap(raw => validBody(raw.asDomain))
+          .flatMap(raw => validated(raw.asDomain))
           .flatMap(book => books.add(book))
           .flatMap(Ok(_))
     }
@@ -102,7 +102,7 @@ class CatalogRoutes[F[_]: Concurrent: MonadThrow] extends Http4sDsl[F] {
 object CatalogRoutes {
   import Categories._
   case class RawCategory(id: String, name: String, description: String) {
-    def asDomain: ValidatedNel[DetailedValidationErr, Category] = (
+    def asDomain: ValidatedNel[ParseFailure, Category] = (
       refineVDetailed[CategoryId](id, "id").toValidatedNel,
       refineVDetailed[CategoryName](name, "name").toValidatedNel,
       refineVDetailed[CategoryDescription](description, "description").toValidatedNel
@@ -118,13 +118,13 @@ object CatalogRoutes {
       categories: List[String],
       summary: String
   ) {
-    def asDomain: ValidatedNel[DetailedValidationErr, Books.Book] = (
+    def asDomain: ValidatedNel[ParseFailure, Books.Book] = (
       refineVDetailed[Books.BookId](id, "id").toValidatedNel,
       refineVDetailed[Books.BookTitle](title, "title").toValidatedNel,
       refineVDetailed[Authors.AuthorId](authorId, "authorId").toValidatedNel,
       refineVDetailed[Books.BookPublicationYear](publicationYear, "publicationYear").toValidatedNel,
       categories.traverse(category => refineVDetailed[CategoryId](category, "categories").toValidatedNel),
-      Validated.validNel[DetailedValidationErr, String](summary)
+      Validated.validNel[ParseFailure, String](summary)
     ).mapN(Book)
   }
 

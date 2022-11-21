@@ -3,6 +3,7 @@ package bookshelf.util
 import cats.MonadThrow
 import cats.data.Kleisli
 import cats.data.Validated
+import cats.data.Validated.{Valid, Invalid}
 import cats.data.ValidatedNel
 import cats.effect.Ref
 import cats.syntax.applicative._
@@ -61,19 +62,17 @@ object validation {
     implicit val UnexpectedlyEmpty = AsDetailedValidationError.forPredicate[NonEmpty]("should not be empty")
   }
 
-  case class DetailedValidationErr(technicalMsg: String, humanMsg: String)
-
   // provider of a detailed error for predicate P given some String technical error
   trait AsDetailedValidationError[P] {
-    def apply(paramName: String, technicalMsg: String): DetailedValidationErr
+    def apply(paramName: String, technicalMsg: String): ParseFailure
   }
 
-  // decorates a Refined Predicate P with a human-friendly error description
+  // Decorates a Refined Predicate P with a human-friendly error description, never echoing back the input value
   object AsDetailedValidationError {
     def forPredicate[P](humanMsg: String): AsDetailedValidationError[P] =
-      (maybeParameName, technical) => {
-        val prefix = if (maybeParameName.isEmpty) "" else s" $maybeParameName "
-        DetailedValidationErr(prefix + technical, prefix + humanMsg)
+      (paramName, technicalError) => {
+        val prefix = if (paramName.isEmpty) "" else s" $paramName "
+        ParseFailure(sanitized = prefix + humanMsg, details = technicalError)
       }
   }
 
@@ -90,9 +89,9 @@ object validation {
     )(implicit
         ev: RTP =:= Refined[T, P],
         v: Validate[T, P],
-        toDetailedErr: AsDetailedValidationError[P]
-    ): Either[DetailedValidationErr, Refined[T, P]] = {
-      refineV(rawValue).leftMap(technical => toDetailedErr(name, technical))
+        asDetailedErr: AsDetailedValidationError[P]
+    ): Either[ParseFailure, Refined[T, P]] = {
+      refineV(rawValue).leftMap(technical => asDetailedErr(name, technical))
     }
   }
 
@@ -100,11 +99,9 @@ object validation {
   // and our custom validation for refined types
   implicit def refinedQueryParamDecoder[T: QueryParamDecoder, P](implicit
       ev: Validate[T, P],
-      toDetailedErr: AsDetailedValidationError[P]
+      asDetailedErr: AsDetailedValidationError[P]
   ): QueryParamDecoder[T Refined P] = QueryParamDecoder[T]
-    .emap(refineVDetailed[T Refined P](_).leftMap {
-      case DetailedValidationErr(technical, friendly) => { ParseFailure(friendly, technical) }
-    })
+    .emap(refineVDetailed[T Refined P](_))
 
   // essentially just a copy of ValidatingQueryParamDecoderMatcher which adds the param name to the error
   // QP is typially a Refined[T, P], although this matcher is agnostic of that
@@ -124,20 +121,13 @@ object validation {
         }
   }
 
-  def validParam[F[_]: MonadThrow, A](validated: ValidatedNel[ParseFailure, A]): F[A] =
+  def validated[F[_]: MonadThrow, A](validated: ValidatedNel[ParseFailure, A]): F[A] =
     validated match {
-      case Validated.Invalid(e) =>
-        val mergedMessage = e.toList.map(_.sanitized).mkString(",")
-        implicitly[MonadThrow[F]].raiseError(ParseFailure(mergedMessage, mergedMessage))
-      case Validated.Valid(genre) => genre.pure[F]
-    }
-
-  def validBody[F[_]: MonadThrow, A](validated: ValidatedNel[DetailedValidationErr, A]): F[A] =
-    validated match {
-      case Validated.Invalid(e) =>
-        val mergedMessage = "Invalid message body:" + e.toList.map(_.humanMsg).mkString(",")
-        implicitly[MonadThrow[F]].raiseError(ParseFailure(mergedMessage, mergedMessage))
-      case Validated.Valid(genre) => genre.pure[F]
+      case Invalid(e) =>
+        val mergedSanitized = e.toList.map(_.sanitized).mkString(",").trim()
+        val mergedDetails = e.toList.map(_.details).mkString(",")
+        implicitly[MonadThrow[F]].raiseError(ParseFailure(mergedSanitized, mergedDetails))
+      case Valid(genre) => genre.pure[F]
     }
 
 }

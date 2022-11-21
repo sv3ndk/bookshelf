@@ -70,7 +70,7 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
     }
   }
 
-  test("invalid category name query param should yield correct error message") {
+  test("invalid category name query param should yield correct error message, without echoing input") {
     testInvalidCategoryRequests(
       GET(uri"?name="),
       Status.BadRequest,
@@ -78,15 +78,17 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
     )
   }
 
-  test("posting well formed json category with 2 (invalid) empty fields should yield an error about both fields") {
+  test(
+    "posting well formed json category with 2 (invalid) empty fields should yield an error about both fields, without echoing input"
+  ) {
     testInvalidCategoryRequests(
       POST(CatalogRoutes.RawCategory("", "", ""), uri""),
       Status.BadRequest,
-      "Invalid message body: id is not a valid UUID, name should not be empty, description should not be empty"
+      "id is not a valid UUID, name should not be empty, description should not be empty"
     )
   }
 
-  test("malformed json body should yield correct error message") {
+  test("malformed json body should yield correct error message, without echoing input") {
     testInvalidCategoryRequests(
       POST("{ this is not valid JSON", uri"/"),
       Status.UnprocessableEntity,
