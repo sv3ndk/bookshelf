@@ -3,10 +3,14 @@ package bookshelf.catalog
 import bookshelf.BookshelfServer
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
-import bookshelf.util.TestUtils
-import bookshelf.util.effect.EffectMap
+import bookshelf.utils.TestUtils
+import bookshelf.utils.effect.EffectMap
 import cats.effect.IO
 import cats.syntax.all._
+import cats.data.ValidatedNel
+import cats.data.Validated.Valid
+import cats.data.Validated.Invalid
+
 import eu.timepit.refined._
 import eu.timepit.refined.api.RefType
 import eu.timepit.refined.api.Refined
@@ -31,6 +35,8 @@ import org.http4s.server.middleware.ErrorHandling
 import org.scalacheck.Gen
 import org.scalacheck.Prop._
 import org.scalacheck.effect.PropF
+import org.scalacheck.Prop
+import _root_.cats.data.Validated
 
 class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSuite {
 
@@ -58,12 +64,13 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
 
   // this is just testing the route itself, in the positive scenario
   test("getting a pre-existing book category should work") {
-    PropF.forAllF(TestData.fineCategoryGen) { category =>
+    PropF.forAllF(TestData.fineCategoriesGen) { testCategories =>
+      val (categoryId, category) = testCategories.head
       testCategoryRoute(
         testData = Map(category.name -> category),
         test = testedApp =>
           assertOkResponse(
-            testedApp.run(GET(Uri.unsafeFromString(s"?name=${category.name.value}"))),
+            testedApp.run(GET(Uri.unsafeFromString(s"?name=${categoryId.value}"))),
             category
           )
       )
@@ -74,7 +81,7 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
     testInvalidCategoryRequests(
       GET(uri"?name="),
       Status.BadRequest,
-      "Invalid query param 'name': should not be empty"
+      "Invalid query param 'name': must be between 1 and 25 char long"
     )
   }
 
@@ -84,7 +91,7 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
     testInvalidCategoryRequests(
       POST(CatalogRoutes.RawCategory("", "", ""), uri""),
       Status.BadRequest,
-      "id is not a valid UUID, name should not be empty, description should not be empty"
+      "id is not a valid UUID, name must be between 1 and 25 char long, description should not be empty"
     )
   }
 
@@ -94,6 +101,16 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
       Status.UnprocessableEntity,
       "The request body was invalid."
     )
+  }
+
+  // ---------------------------------- data validation ---------------------------
+
+  test("valid raw category should correctly be converted to domain") {
+    import CatalogRoutes._
+    Prop.forAll(TestData.fineCategoryGen) { fineCategory =>
+      val rawCategory = new RawCategory(fineCategory.id.value, fineCategory.name.value, fineCategory.description.value)
+      assertEquals(rawCategory.asDomain, Validated.valid(fineCategory))
+    }
   }
 
 }

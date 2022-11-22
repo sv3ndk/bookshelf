@@ -1,8 +1,8 @@
 package bookshelf.catalog
 
-import bookshelf.util.effect.EffectMap
-import bookshelf.util.validation
-import bookshelf.util.validation.AsDetailedValidationError
+import bookshelf.utils.effect.EffectMap
+import bookshelf.utils.validation
+import bookshelf.utils.validation.AsDetailedValidationError
 import cats.MonadThrow
 import cats.effect.Concurrent
 import cats.effect.IO
@@ -19,6 +19,7 @@ import eu.timepit.refined.collection._
 import eu.timepit.refined.generic._
 import eu.timepit.refined.numeric._
 import eu.timepit.refined.string._
+import _root_.cats.effect.syntax.async
 
 trait Categories[F[_]] {
   def getAll: F[List[Categories.Category]]
@@ -29,20 +30,12 @@ trait Categories[F[_]] {
 object Categories {
 
   type CategoryId = String Refined Uuid
-  type CategoryName = String Refined NonEmpty
+  type CategoryNameConstraint = And[MinSize[1], MaxSize[25]]
+  type CategoryName = String Refined CategoryNameConstraint
+  implicit val InvalidCategoryNameErr =
+    AsDetailedValidationError.forPredicate[CategoryNameConstraint]("must be between 1 and 25 char long")
   type CategoryDescription = String Refined NonEmpty
   case class Category(id: CategoryId, name: CategoryName, description: CategoryDescription)
-
-  type FooYear = Int Refined Positive
-  implicit val NonPositiveErr = AsDetailedValidationError.forPredicate[Positive]("should positive")
-
-  type SomethingElse = Int Refined MinSize[3]
-  implicit val IgnoredFriendlyError =
-    AsDetailedValidationError.forPredicate[MinSize[3]]("Should be larger than 3")
-
-  type SomethingElse2 = String Refined MinSize[3]
-  implicit val IgnoredFriendlyError2 =
-    AsDetailedValidationError.forPredicate[MinSize[3]]("Should be larger than 3 bis")
 
   def make[F[_]: Concurrent]: F[Categories[F]] =
     // TODO: replace this with usage of PostGres and Doobie
@@ -59,7 +52,6 @@ object Categories {
 
 trait Authors[F[_]] {
   def getAll: F[List[Authors.Author]]
-
 }
 
 object Authors {

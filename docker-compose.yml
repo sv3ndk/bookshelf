@@ -1,0 +1,12 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:15.1
+    volumes:
+      - ./db/bookshelf-schema.sql:/docker-entrypoint-initdb.d/bookshelf-schema.sql
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: bookshelf

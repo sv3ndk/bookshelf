@@ -3,7 +3,7 @@ package bookshelf
 import bookshelf.catalog.Authors
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
-import bookshelf.util.validation._
+import bookshelf.utils.validation._
 import cats.effect.Async
 import cats.effect.Resource
 import cats.syntax.all._
@@ -56,7 +56,6 @@ object BookshelfServer {
           .default[F]
           .withHost(ipv4"0.0.0.0")
           .withPort(port"8080")
-          // .withHttpApp(verboseErrorHandlingMiddleware(theApp))
           .withHttpApp(ErrorHandling.Recover.messageFailure(theApp))
           .build >>
           Resource.eval(Async[F].never)

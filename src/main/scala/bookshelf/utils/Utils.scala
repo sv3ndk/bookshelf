@@ -1,4 +1,4 @@
-package bookshelf.util
+package bookshelf.utils
 
 import cats.MonadThrow
 import cats.data.Kleisli

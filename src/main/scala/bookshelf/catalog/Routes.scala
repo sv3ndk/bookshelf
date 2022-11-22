@@ -1,7 +1,7 @@
 package bookshelf.catalog
 
-import bookshelf.util.validation.CommonErrorMessages._
-import bookshelf.util.validation._
+import bookshelf.utils.validation.CommonErrorMessages._
+import bookshelf.utils.validation._
 import cats.Applicative
 import cats.FlatMap
 import cats.MonadError

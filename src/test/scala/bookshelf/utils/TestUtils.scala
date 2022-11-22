@@ -1,5 +1,7 @@
-package bookshelf.util
+package bookshelf.utils
 
+import cats.data.ValidatedNel
+import cats.data.Validated.{Invalid, Valid}
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
 import cats.syntax.functor._
@@ -9,10 +11,11 @@ import org.http4s.EntityDecoder
 import org.http4s.Response
 import org.http4s.Status
 import org.http4s.implicits._
+import munit.Assertions
 
 trait TestUtils {
 
-  self: CatsEffectAssertions =>
+  self: CatsEffectAssertions with Assertions =>
 
   def bodyAsText(body: fs2.Stream[IO, Byte]): IO[String] =
     body
@@ -35,14 +38,11 @@ trait TestUtils {
       )
 
   def assertFailedResponse[A](tested: IO[Response[IO]], expectedStatus: Status, expectedBody: String): IO[Unit] =
-    assertIO(tested.map(_.status), expectedStatus) *>
-      assertIO(
-        tested.flatMap(response => bodyAsText(response.body)).map(_.toString()),
-        expectedBody.toString()
-      )
+    tested.map(_.status).assertEquals(expectedStatus) *>
+      tested.flatMap(response => bodyAsText(response.body)).assertEquals(expectedBody)
 
   def assertFailedResponse[A](tested: Response[IO], expectedStatus: Status, expectedBody: String): IO[Unit] =
-    assertIO(IO.pure(tested.status), expectedStatus) *>
+    IO.pure(tested.status).assertEquals(expectedStatus) *>
       assertIO(bodyAsText(tested.body), expectedBody)
 
 }

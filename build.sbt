@@ -4,6 +4,7 @@ val CirceVersion = "0.14.3"
 val MunitVersion = "0.7.29"
 val LogbackVersion = "1.4.4"
 val RefinedVersion = "0.10.1"
+val DoobieVersion = "1.0.0-RC1"
 
 lazy val root = (project in file("."))
   .settings(
@@ -21,6 +22,9 @@ lazy val root = (project in file("."))
       "io.circe" %% "circe-refined" % CirceVersion,
       "eu.timepit" %% "refined" % RefinedVersion,
       "eu.timepit" %% "refined-cats" % RefinedVersion,
+      "org.tpolecat" %% "doobie-core" % DoobieVersion,
+      "org.tpolecat" %% "doobie-postgres" % DoobieVersion,
+      "org.tpolecat" %% "doobie-refined" % DoobieVersion,
       "org.scalameta" %% "munit" % MunitVersion % Test,
       "org.scalameta" %% "munit-scalacheck" % MunitVersion % Test,
       "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % Test,

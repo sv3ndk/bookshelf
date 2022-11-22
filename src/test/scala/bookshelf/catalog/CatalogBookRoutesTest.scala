@@ -4,9 +4,11 @@ import bookshelf.BookshelfServer
 import bookshelf.catalog.Books._
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
-import bookshelf.util.TestUtils
-import bookshelf.util.effect.EffectMap
+import bookshelf.utils.TestUtils
+import bookshelf.utils.effect.EffectMap
 import cats.effect.IO
+import cats.instances.finiteDuration
+import cats.data.Validated
 import cats.syntax.all._
 import eu.timepit.refined._
 import eu.timepit.refined.api.RefType
@@ -31,6 +33,7 @@ import org.http4s.implicits._
 import org.http4s.server.middleware.ErrorHandling
 import org.scalacheck.Gen
 import org.scalacheck.Prop._
+import org.scalacheck.Prop
 import org.scalacheck.effect.PropF
 
 class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSuite {
@@ -59,12 +62,13 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
 
   // this is just testing the route itself, in the positive scenario
   test("getting a pre-existing book category should work") {
-    PropF.forAllF(TestData.fineBookGen) { book =>
+    PropF.forAllF(TestData.fineBooksGen) { testBooks =>
+      val (bookId, book) = testBooks.head
       testBookRoute(
-        testData = Map(book.id -> book),
+        testData = testBooks,
         test = testedApp =>
           assertOkResponse(
-            testedApp.run(GET(Uri.unsafeFromString(s"?id=${book.id.value}"))),
+            testedApp.run(GET(Uri.unsafeFromString(s"?id=${bookId.value}"))),
             book
           )
       )
@@ -85,6 +89,23 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
       Status.BadRequest,
       "id is not a valid UUID, title should not be empty, authorId is not a valid UUID, publicationYear should be a year in [1800, 2200], categories is not a valid UUID, categories is not a valid UUID"
     )
+  }
+
+  // ---------------------------------- data validation ---------------------------
+
+  test("valid raw book should correctly be converted to domain") {
+    import CatalogRoutes._
+    Prop.forAll(TestData.fineBookGen) { fineBook =>
+      val rawBook = new RawBook(
+        fineBook.id.value,
+        fineBook.title.value,
+        fineBook.authorId.value,
+        fineBook.publicationYear.value,
+        fineBook.categories.map(_.value),
+        fineBook.summary
+      )
+      assertEquals(rawBook.asDomain, Validated.valid(fineBook))
+    }
   }
 
 }
