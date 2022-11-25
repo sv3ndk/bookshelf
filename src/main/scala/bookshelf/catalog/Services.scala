@@ -2,15 +2,19 @@ package bookshelf.catalog
 
 import bookshelf.utils.effect.EffectMap
 import bookshelf.utils.validation
+import bookshelf.utils.core.{makeId, TechnicalError}
 import bookshelf.utils.validation.AsDetailedValidationError
 import cats.MonadThrow
 import cats.effect.Concurrent
 import cats.effect.IO
 import cats.effect.Ref
 import cats.effect.kernel.Resource
+import cats.effect.syntax.async
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
+import doobie._
+import doobie.implicits._
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.api.Validate
@@ -19,12 +23,11 @@ import eu.timepit.refined.collection._
 import eu.timepit.refined.generic._
 import eu.timepit.refined.numeric._
 import eu.timepit.refined.string._
-import _root_.cats.effect.syntax.async
 
-trait Categories[F[_]] {
-  def getAll: F[List[Categories.Category]]
-  def get(name: Categories.CategoryName): F[Option[Categories.Category]]
-  def add(genre: Categories.Category): F[Categories.CategoryName]
+trait Categories {
+  def getAll: IO[List[Categories.Category]]
+  def get(name: Categories.CategoryName): IO[Option[Categories.Category]]
+  def create(category: Categories.CreateCategory): IO[Categories.CategoryId]
 }
 
 object Categories {
@@ -35,45 +38,44 @@ object Categories {
   implicit val InvalidCategoryNameErr =
     AsDetailedValidationError.forPredicate[CategoryNameConstraint]("must be between 1 and 25 char long")
   type CategoryDescription = String Refined NonEmpty
+  case class CreateCategory(name: CategoryName, description: CategoryDescription)
   case class Category(id: CategoryId, name: CategoryName, description: CategoryDescription)
 
-  def make[F[_]: Concurrent]: F[Categories[F]] =
-    // TODO: replace this with usage of PostGres and Doobie
-    EffectMap
-      .make[F, CategoryName, Category]()
-      .map { state =>
-        new Categories[F] {
-          def getAll: F[List[Category]] = state.getAllValues
-          def get(name: CategoryName): F[Option[Category]] = state.get(name)
-          def add(category: Category): F[CategoryName] = state.add(category.name, category)
-        }
-      }
+  def make(xa: Transactor[IO]) = new Categories {
+    def get(name: CategoryName) = CategoriesDb.get(name).transact(xa)
+    def getAll = CategoriesDb.getAll.transact(xa)
+    def create(category: CreateCategory) =
+      IO.fromEither(makeId[CategoryId])
+        .flatMap(id => CategoriesDb.create(id, category).transact(xa))
+  }
 }
 
-trait Authors[F[_]] {
-  def getAll: F[List[Authors.Author]]
+trait Authors {
+  def get(id: Authors.AuthorId): IO[Option[Authors.Author]]
+  def getAll: IO[List[Authors.Author]]
+  def create(createAuthor: Authors.CreateAuthor): IO[Authors.AuthorId]
 }
 
 object Authors {
 
   type AuthorId = String Refined Uuid
-  case class Author(firstName: String, lastName: String)
+  type FirstName = String Refined NonEmpty
+  type LastName = String Refined NonEmpty
+  case class Author(id: AuthorId, firstName: FirstName, lastName: LastName)
+  case class CreateAuthor(firstName: FirstName, lastName: LastName)
 
-  def make[F[_]: MonadThrow: Ref.Make]: F[Authors[F]] = {
-    // TODO: should use Postgres and Doobie instead
-    EffectMap
-      .make[F, String, Author]()
-      .map { state =>
-        new Authors[F] {
-          def getAll: F[List[Author]] = state.getAllValues
-        }
-      }
+  def make(xa: Transactor[IO]) = new Authors {
+    def get(id: AuthorId): IO[Option[Authors.Author]] = AuthorsDb.get(id).transact(xa)
+    def getAll: IO[List[Author]] = AuthorsDb.getAll.transact(xa)
+    def create(createAuthor: Authors.CreateAuthor) =
+      IO.fromEither(makeId[AuthorId])
+        .flatMap(id => AuthorsDb.create(id, createAuthor).transact(xa))
   }
 }
 
-trait Books[F[_]] {
-  def add(book: Books.Book): F[Books.BookId]
-  def get(id: Books.BookId): F[Option[Books.Book]]
+trait Books {
+  def get(id: Books.BookId): IO[Option[Books.Book]]
+  def create(createBook: Books.CreateBook): IO[Books.BookId]
 }
 
 object Books {
@@ -83,27 +85,28 @@ object Books {
   type BookPublicationYear = Int Refined And[Greater[1800], Less[2200]]
   implicit val InvalidPublicationYear =
     AsDetailedValidationError.forPredicate[And[Greater[1800], Less[2200]]]("should be a year in [1800, 2200]")
-
   type BookSummary = String
   case class Book(
       id: BookId,
       title: BookTitle,
+      author: Authors.Author,
+      publicationYear: BookPublicationYear,
+      categories: List[Categories.Category],
+      summary: String
+  )
+  case class CreateBook(
+      title: BookTitle,
       authorId: Authors.AuthorId,
       publicationYear: BookPublicationYear,
-      categories: List[Categories.CategoryId],
+      categoryIds: List[Categories.CategoryId],
       summary: String
   )
 
-  def make[F[_]: MonadThrow: Ref.Make]: F[Books[F]] = {
-    // TODO: should use Postgres and Doobie instead
-    EffectMap
-      .make[F, BookId, Book]()
-      .map { state =>
-        new Books[F] {
-          def add(book: Book) = state.add(book.id, book)
-          def get(id: BookId) = state.get(id)
-        }
-      }
+  def make(xa: Transactor[IO]) = new Books {
+    def get(id: BookId): IO[Option[Book]] = BooksDb.get(id).transact(xa)
+    def create(createBook: Books.CreateBook) =
+      IO.fromEither(makeId[BookId])
+        .flatMap(id => BooksDb.create(id, createBook).transact(xa))
   }
 
 }

@@ -48,7 +48,7 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
   ): IO[Unit] = {
     for {
       mockCategories <- TestData.mockCategoriesService(testData)
-      testedApp = ErrorHandling.Recover.messageFailure(new CatalogRoutes[IO].categoryRoutes(mockCategories).orNotFound)
+      testedApp = ErrorHandling.Recover.messageFailure(CatalogRoutes.categoryRoutes(mockCategories).orNotFound)
       result <- test(testedApp)
     } yield result
   }

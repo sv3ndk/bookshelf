@@ -42,7 +42,7 @@ class WebAppSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSui
 
   def testViaApp(test: Client[IO] => IO[Unit]): IO[Unit] = {
     // TODO: we probably want to fully initialize the app with a bunch of mocked services here
-    BookshelfServer.bookshelfApp[IO].use { testedApp =>
+    BookshelfServer.bookshelfApp.use { testedApp =>
       val client = Client.fromHttpApp(testedApp)
       test(client)
     }

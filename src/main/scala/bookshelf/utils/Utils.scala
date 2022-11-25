@@ -3,8 +3,10 @@ package bookshelf.utils
 import cats.MonadThrow
 import cats.data.Kleisli
 import cats.data.Validated
-import cats.data.Validated.{Valid, Invalid}
+import cats.data.Validated.Invalid
+import cats.data.Validated.Valid
 import cats.data.ValidatedNel
+import cats.effect.IO
 import cats.effect.Ref
 import cats.syntax.applicative._
 import cats.syntax.applicativeError._
@@ -121,13 +123,25 @@ object validation {
         }
   }
 
-  def validated[F[_]: MonadThrow, A](validated: ValidatedNel[ParseFailure, A]): F[A] =
+  def validated[A](validated: ValidatedNel[ParseFailure, A]): IO[A] =
     validated match {
       case Invalid(e) =>
         val mergedSanitized = e.toList.map(_.sanitized).mkString(",").trim()
         val mergedDetails = e.toList.map(_.details).mkString(",")
-        implicitly[MonadThrow[F]].raiseError(ParseFailure(mergedSanitized, mergedDetails))
-      case Valid(genre) => genre.pure[F]
+        IO.raiseError(ParseFailure(mergedSanitized, mergedDetails))
+      case Valid(a) => IO.pure(a)
     }
+}
+
+object core {
+
+  class TechnicalError(err: String) extends RuntimeException
+
+  def makeId[A](implicit ev: Refined[String, Uuid] =:= A): Either[TechnicalError, A] =
+    refineV[Uuid](java.util.UUID.randomUUID().toString())
+      .fold(
+        err => Left(new TechnicalError(err)),
+        a => Right(a)
+      )
 
 }

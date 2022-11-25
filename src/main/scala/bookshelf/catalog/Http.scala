@@ -11,8 +11,13 @@ import cats.data.Validated
 import cats.data.Validated.Invalid
 import cats.data.Validated.Valid
 import cats.data.ValidatedNel
+import cats.effect.IO
 import cats.effect.Concurrent
 import cats.syntax.all._
+import doobie._
+import doobie.implicits._
+import doobie.util.transactor
+
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.api.Validate
@@ -30,53 +35,59 @@ import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 
-import CatalogRoutes._
+object CatalogRoutes extends Http4sDsl[IO] {
 
-class CatalogRoutes[F[_]: Concurrent: MonadThrow] extends Http4sDsl[F] {
-
-  // add, get, update (including archive) books
-  // get all by genre (paginated, should I use stream and leave the connection open?)
-  // get all by author
-  // full text search on title/genre/summary
-
-  def categoryRoutes(categories: Categories[F]): HttpRoutes[F] = {
+  def categoryRoutes(categories: Categories): HttpRoutes[IO] = {
 
     import Categories._
 
     object NameQueryParamMatcher extends NamedQueryParamDecoderMatcher[CategoryName]("name")
 
     HttpRoutes.of {
-      case GET -> Root / "all" => Ok(categories.getAll)
+      case GET -> Root / "all" =>
+        categories.getAll.flatMap(Ok(_))
 
-      // TODO: we should get a category by id instead
       case GET -> Root :? NameQueryParamMatcher(catParam) =>
         validated(catParam)
           .flatMap(category => categories.get(category))
           .flatMap(Ok(_))
 
-      // TODO: this action should require authentication
       case req @ POST -> Root =>
         req
-          .as[RawCategory]
+          .as[RawCreateCategory]
           .flatMap(raw => validated(raw.asDomain))
-          .flatMap(cat => categories.add(cat))
+          .flatMap(categories.create)
+          .flatMap(Created(_))
+    }
+  }
+
+  def authorRoutes(authors: Authors): HttpRoutes[IO] = {
+    import Authors._
+    object IdQueryParamMatcher extends NamedQueryParamDecoderMatcher[AuthorId]("id")
+
+    HttpRoutes.of {
+      case GET -> Root :? IdQueryParamMatcher(idParam) =>
+        validated(idParam)
+          .flatMap(id => authors.get(id))
           .flatMap(Ok(_))
+
+      case GET -> Root / "all" => authors.getAll.flatMap(Ok(_))
+
+      case req @ POST -> Root =>
+        req
+          .as[RawCreateAuthor]
+          .flatMap(raw => validated(raw.asDomain))
+          .flatMap(authors.create)
+          .flatMap(Created(_))
+
     }
   }
 
-  def authorRoutes(authors: Authors[F]): HttpRoutes[F] = {
-    HttpRoutes.of { case GET -> Root / "all" =>
-      authors.getAll
-        .flatMap(Ok(_))
-    }
-  }
-
-  def bookRoutes(books: Books[F]): HttpRoutes[F] = {
+  def bookRoutes(books: Books): HttpRoutes[IO] = {
 
     object IdQueryParamMatcher extends NamedQueryParamDecoderMatcher[Books.BookId]("id")
 
     HttpRoutes.of {
-
       case GET -> Root :? IdQueryParamMatcher(idParam) =>
         validated(idParam)
           .flatMap(id => books.get(id))
@@ -84,48 +95,50 @@ class CatalogRoutes[F[_]: Concurrent: MonadThrow] extends Http4sDsl[F] {
 
       case req @ POST -> Root =>
         req
-          .as[RawBook]
+          .as[RawCreateBook]
           .flatMap(raw => validated(raw.asDomain))
-          .flatMap(book => books.add(book))
-          .flatMap(Ok(_))
+          .flatMap(books.create)
+          .flatMap(Created(_))
     }
   }
 
-  def routes(genres: Categories[F], authors: Authors[F], books: Books[F]): HttpRoutes[F] =
+  def routes(categories: Categories, authors: Authors, books: Books): HttpRoutes[IO] =
     Router(
-      "category" -> categoryRoutes(genres),
+      "category" -> categoryRoutes(categories),
       "author" -> authorRoutes(authors),
       "book" -> bookRoutes(books)
     )
-}
 
-object CatalogRoutes {
   import Categories._
-  case class RawCategory(id: String, name: String, description: String) {
-    def asDomain: ValidatedNel[ParseFailure, Category] = (
-      refineVDetailed[CategoryId](id, "id").toValidatedNel,
+  import Authors._
+  import Books._
+  case class RawCreateCategory(name: String, description: String) {
+    def asDomain: ValidatedNel[ParseFailure, CreateCategory] = (
       refineVDetailed[CategoryName](name, "name").toValidatedNel,
       refineVDetailed[CategoryDescription](description, "description").toValidatedNel
-    ).mapN(Category)
+    ).mapN(CreateCategory)
   }
 
-  import Books._
-  case class RawBook(
-      id: String,
+  case class RawCreateAuthor(firstName: String, lastName: String) {
+    def asDomain: ValidatedNel[ParseFailure, CreateAuthor] = (
+      refineVDetailed[Authors.FirstName](firstName, "firstName").toValidatedNel,
+      refineVDetailed[Authors.LastName](lastName, "lastName").toValidatedNel
+    ).mapN(CreateAuthor)
+  }
+  case class RawCreateBook(
       title: String,
       authorId: String,
       publicationYear: Int,
-      categories: List[String],
+      categoryIds: List[String],
       summary: String
   ) {
-    def asDomain: ValidatedNel[ParseFailure, Books.Book] = (
-      refineVDetailed[Books.BookId](id, "id").toValidatedNel,
+    def asDomain: ValidatedNel[ParseFailure, CreateBook] = (
       refineVDetailed[Books.BookTitle](title, "title").toValidatedNel,
       refineVDetailed[Authors.AuthorId](authorId, "authorId").toValidatedNel,
       refineVDetailed[Books.BookPublicationYear](publicationYear, "publicationYear").toValidatedNel,
-      categories.traverse(category => refineVDetailed[CategoryId](category, "categories").toValidatedNel),
+      categoryIds.traverse(catId => refineVDetailed[Categories.CategoryId](catId, "categoryIds").toValidatedNel),
       Validated.validNel[ParseFailure, String](summary)
-    ).mapN(Book)
+    ).mapN(CreateBook)
   }
 
 }

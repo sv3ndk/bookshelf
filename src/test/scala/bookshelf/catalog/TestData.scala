@@ -10,23 +10,23 @@ import org.scalacheck.Gen
 import eu.timepit.refined._
 
 object TestData {
-  def mockCategoriesService(data: Map[Categories.CategoryName, Categories.Category]): IO[Categories[IO]] =
+  def mockCategoriesService(data: Map[Categories.CategoryName, Categories.Category]): IO[Categories] =
     effect.EffectMap
       .make[IO, Categories.CategoryName, Categories.Category](data)
       .map { state =>
-        new Categories[IO] {
+        new Categories {
           def getAll = state.getAllValues
           def get(name: Categories.CategoryName) = state.get(name)
           def add(category: Categories.Category) = state.add(category.name, category)
         }
       }
 
-  def mockBooksService(data: Map[Books.BookId, Books.Book]): IO[Books[IO]] =
+  def mockBooksService(data: Map[Books.BookId, Books.Book]): IO[Books] =
     effect.EffectMap
       .make[IO, Books.BookId, Books.Book](data)
       .map { state =>
-        new Books[IO] {
-          def add(book: Books.Book) = state.add(book.id, book)
+        new Books {
+          // def add(book: Books.Book) = state.add(book.id, book)
           def get(id: Books.BookId) = state.get(id)
         }
       }

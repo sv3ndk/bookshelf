@@ -1,13 +1,20 @@
 package bookshelf
 
-import bookshelf.catalog.Authors
+import bookshelf.catalog.Books
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
+import bookshelf.catalog._
 import bookshelf.utils.validation._
 import cats.effect.Async
+import cats.effect.ExitCode
+import cats.effect.IO
+import cats.effect.IOApp
 import cats.effect.Resource
 import cats.syntax.all._
 import com.comcast.ip4s._
+import doobie.hikari._
+import doobie.util.ExecutionContexts
+import doobie.util.transactor.Transactor
 import fs2.Stream
 import org.http4s.EntityEncoder
 import org.http4s.HttpApp
@@ -25,41 +32,52 @@ import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.middleware.ErrorHandling
 import org.http4s.server.middleware.Logger
-import bookshelf.catalog.Books
 
 object BookshelfServer {
 
-  def bookshelfApp[F[_]: Async]: Resource[F, HttpApp[F]] = for {
-    client <- EmberClientBuilder.default[F].build
-    // jokeAlg = Jokes.impl[F](client
-    genres <- Resource.eval(Categories.make[F])
-    authors <- Resource.eval(Authors.make[F])
-    books <- Resource.eval(Books.make[F])
+  val transactor: Resource[IO, HikariTransactor[IO]] =
+    for {
+      ce <- ExecutionContexts.fixedThreadPool[IO](2)
+      xa <- HikariTransactor.newHikariTransactor[IO](
+        "org.postgresql.Driver",
+        "jdbc:postgresql:bookshelf",
+        "testuser",
+        "testpassword",
+        ce
+      )
+    } yield xa
 
-    httpApp = Router
+  def bookshelfApp(xa: Transactor[IO]): HttpApp[IO] = {
+    val httpApp = Router
       .of(
-        // ("joke", BikeconfiguratorRoutes.jokeRoutes[F](jokeAlg)),
-        "catalog" -> new CatalogRoutes[F].routes(genres, authors, books)
+        "catalog" -> CatalogRoutes.routes(
+          Categories.make(xa),
+          Authors.make(xa),
+          Books.make(xa)
+        )
       )
       .orNotFound
 
-    // With Middlewares in place
-    finalHttpApp = Logger.httpApp(true, true)(httpApp)
-  } yield finalHttpApp
+    // middleware
+    val finalHttpApp = Logger.httpApp(true, true)(httpApp)
+    finalHttpApp
+  }
 
-  def server[F[_]: Async]: Stream[F, Nothing] = {
-    for {
-      theApp <- Stream.resource(bookshelfApp)
-
-      exitCode <- Stream.resource(
+  def server: IO[Nothing] =
+    transactor
+      .map(xa => bookshelfApp(xa))
+      .flatMap(app =>
         EmberServerBuilder
-          .default[F]
+          .default[IO]
           .withHost(ipv4"0.0.0.0")
           .withPort(port"8080")
-          .withHttpApp(ErrorHandling.Recover.messageFailure(theApp))
-          .build >>
-          Resource.eval(Async[F].never)
+          .withHttpApp(ErrorHandling.Recover.messageFailure(app))
+          .build
       )
-    } yield exitCode
-  }.drain
+      .use(_ => IO.never[Nothing])
+}
+
+object BookshelfServerApp extends IOApp {
+  def run(args: List[String]) =
+    BookshelfServer.server.as(ExitCode.Success)
 }

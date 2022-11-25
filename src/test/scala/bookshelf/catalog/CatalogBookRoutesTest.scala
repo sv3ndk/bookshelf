@@ -46,7 +46,7 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
   ): IO[Unit] = {
     for {
       mockBooksService <- TestData.mockBooksService(testData)
-      testedApp = ErrorHandling.Recover.messageFailure(new CatalogRoutes[IO].bookRoutes(mockBooksService).orNotFound)
+      testedApp = ErrorHandling.Recover.messageFailure(CatalogRoutes.bookRoutes(mockBooksService).orNotFound)
       result <- test(testedApp)
     } yield result
   }
@@ -85,7 +85,7 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
 
   test("posting well formed json category with all (invalid) empty fields should yield an error about both fields") {
     testInvalidBookRequests(
-      POST(CatalogRoutes.RawBook("", "", "", 0, List("", ""), ""), uri""),
+      POST(Book("", "", "", 0, List("", ""), ""), uri""),
       Status.BadRequest,
       "id is not a valid UUID, title should not be empty, authorId is not a valid UUID, publicationYear should be a year in [1800, 2200], categories is not a valid UUID, categories is not a valid UUID"
     )
@@ -96,7 +96,7 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
   test("valid raw book should correctly be converted to domain") {
     import CatalogRoutes._
     Prop.forAll(TestData.fineBookGen) { fineBook =>
-      val rawBook = new RawBook(
+      val rawBook = new Book(
         fineBook.id.value,
         fineBook.title.value,
         fineBook.authorId.value,

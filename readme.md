@@ -2,16 +2,7 @@
 
 Toy application to handle books and bookshelves, as an excuse to play with Typelevel Cats eco-system.
 
-Tech stack:
-
-* core: cats and cats-effect
-* rest layer: http4s
-* data validation: refined
-* persistence: Doobie and postgres
-* unit-tests: munit and scalacheck
-
-
-Use cases:
+# Use cases:
 
 * moderators can
   * add/update/archive books 
@@ -38,11 +29,37 @@ Use cases:
   * flag comments as problematic
   * add ratings to books
 
-domains:
-  * catalog: handling of the book catalog available on the site, including search
-  * shelve: allow users to manage their bookshelves
-  * session: login, logout
-  * social: comments, rating, moderation
+
+
+# Design:
+
+
+## KISS code structure
+
+* most operations are super simple CRUD stuff => 3 simple layers:
+    * http: responsible for web routing, (de)serialization, authentication...
+    * persistence: interraction with DB
+    * services: business scenario (when they exist), definition of dB transaction boundaries, retries, fall-back strategy
+* I'm not using tagless final but rather committing to the concrete IO effect
+* the transaction boundary is defined in the application entrypoint, i.e. the http layer. It's a bit unclean since it makes the http layer
+  in charge of a persistence concern, but it keeps things simple. As the application grows, we could move that concern to a business layer
+* I followed the mantra "package together things that change together", s.t. things are grouped in folder per domain (`catalog`, `session`,..) 
+  instead of grouping them by technical concern (e.g. `model`, `http`, `persistence`,...)
+
+
+## domains
+  * `catalog`: handling of the book catalog available on the site, including search
+  * `shelf`: allow users to manage their bookshelves
+  * `profile`: login, logout, user creation
+  * `social`: comments, rating, moderation
+
+## Tech stack:
+
+* core: cats and cats-effect
+* rest layer: http4s
+* data validation: refined
+* persistence: Doobie and postgres
+* unit-tests: munit and scalacheck
 
 
 
@@ -59,9 +76,11 @@ import org.http4s.circe.CirceEntityCodec._
 
 * error handling in http4s can either be specifically in each route, or else for repetitive stuff we can let the `MessageFailure` "bubbleUp" and use a middleware to transform it. I crafted a middleware that returns quite a verbose message, it's probably not the most secure option.
 
-* I don't like implicits, they fail in obscure ways when the relevant imports are missing
+* I don't like implicits, they fail in obscure ways when the relevant imports are missing, especially when a chain of them is necessary (e.g. a functio requireing an implicit entity decorer, itself requiring a json decoder, itself requiring a refined type decoder...), as a user I need to understand lot's of implementation details to fix my bugs when I used them incorrectly.
 
-* stack traces in an app written with Cats are pretty much unusable since they often show mostly pluming technical info as opposed to pointing to the source of the issue 
+* stack traces in app written with Cats are pretty much unusable since they often show mostly pluming technical info as opposed to pointing to the source of the issue 
+
+* Tagless final is probably overly-generalization that adds an additional layer of abstraction for little added value. OTOH we end up with all functions returning `IO[Stuff]` which is a bit the effect equivalent of returning `Object` everywhere, it's super broad. Ideally, we should seek opportunities to express logic as simple functions outside of any effect, and delegate to it from and effectful layer.
 
 Further notes:
 
@@ -71,60 +90,19 @@ Further notes:
     * it's prone to overlap: once an error message is associated to a constraint for one meaning (say, a publication year should be > 1800), we cannot define another one error for the same constrain in another context (say, a page count that shoudl also be > 1800 for some reason)
     * it doesn't address semantic meaning: 2 types that are equivalent at type level with different semantics (say AuthorId and BookId both being `String Refined Uuid`) can still be passed one instead of the other
 
-# Experimenting with the DB
 
-```shell
-# launches local DB + populates with test data
-docker-compose up
-```
+TODO:
+* add persistence layer:
+  * fix missign category when saving a book
+  * fix current UTs + add a few
+  * convert the demo client to an integration test, using testcontainer scala https://github.com/testcontainers/testcontainers-scala
+  * improve error handling: empty list in json input, non-existing author id when creating a book,...
+  * add ability to update and delete
+  * add calls to Doobie query check() as part of integration test
 
-From sbt console:
-
-```scala
-import doobie._
-import doobie.implicits._
-import doobie.util.ExecutionContexts
-import cats._
-import cats.data._
-import cats.effect._
-import cats.implicits._
-import fs2.Stream
-
-import cats.effect.unsafe.implicits.global
-
-val xa = Transactor.fromDriverManager[IO](
-  "org.postgresql.Driver",     
-  "jdbc:postgresql:bookshelf",     
-  "testuser",                  
-  "testpassword"                          
-)
-
-// this works 
-val rawCat = bookshelf.catalog.CatalogRoutes.RawCategory("3092fc51-dc11-4ab3-a2ec-7df03a81aa73", "testfoo", "bla")
-sql"""
-  insert into category (id, name, description)
-  values (${rawCat.id}, ${rawCat.name}, ${rawCat.description})
-  """.update.run
-  .transact(xa)     
-  .unsafeRunSync()  
-
-// this works
-sql"select id, name, description from category"
-  .query[(String, String, String)]    
-  .to[List]         
-  .transact(xa)     
-  .unsafeRunSync()  
-  .foreach(l => println(l)) 
-
-// this requires to be executed from an instance inheriting from doobie.refined.Instances
-// SecondaryValidationFailed
-sql"select id, name, description from category"
-  .query[bookshelf.catalog.Categories.Category]    
-  .to[List]         
-  .transact(xa)     
-  .unsafeRunSync()  
-  .foreach(l => println(l)) 
-
-```
-
-
+* add pagination to book and author queries
+* logging
+* retry strategy
+* authentication + profile domain
+* shelf domain + add a Redis persistence
+* 
