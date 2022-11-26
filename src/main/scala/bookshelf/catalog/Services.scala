@@ -1,8 +1,8 @@
 package bookshelf.catalog
 
-import bookshelf.utils.effect.EffectMap
+import bookshelf.utils.core.TechnicalError
+import bookshelf.utils.core.makeId
 import bookshelf.utils.validation
-import bookshelf.utils.core.{makeId, TechnicalError}
 import bookshelf.utils.validation.AsDetailedValidationError
 import cats.MonadThrow
 import cats.effect.Concurrent
@@ -25,8 +25,8 @@ import eu.timepit.refined.numeric._
 import eu.timepit.refined.string._
 
 trait Categories {
-  def getAll: IO[List[Categories.Category]]
   def get(name: Categories.CategoryName): IO[Option[Categories.Category]]
+  def getAll: IO[List[Categories.Category]]
   def create(category: Categories.CreateCategory): IO[Categories.CategoryId]
 }
 

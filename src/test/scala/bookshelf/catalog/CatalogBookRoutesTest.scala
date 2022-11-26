@@ -1,11 +1,10 @@
 package bookshelf.catalog
 
-import bookshelf.BookshelfServer
 import bookshelf.catalog.Books._
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
+import bookshelf.utils.core.makeId
 import bookshelf.utils.TestUtils
-import bookshelf.utils.effect.EffectMap
 import cats.effect.IO
 import cats.instances.finiteDuration
 import cats.data.Validated
@@ -38,74 +37,53 @@ import org.scalacheck.effect.PropF
 
 class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSuite {
 
-  // ----------------------
+  def testedBooksRoutes(stub: BooksStub = new BooksStub()) =
+    ErrorHandling.Recover.messageFailure(CatalogRoutes.bookRoutes(stub).orNotFound)
 
-  def testBookRoute(
-      testData: Map[Books.BookId, Books.Book],
-      test: HttpApp[IO] => IO[Unit]
-  ): IO[Unit] = {
-    for {
-      mockBooksService <- TestData.mockBooksService(testData)
-      testedApp = ErrorHandling.Recover.messageFailure(CatalogRoutes.bookRoutes(mockBooksService).orNotFound)
-      result <- test(testedApp)
-    } yield result
+  test("getting a pre-existing book category") {
+    PropF.forAllF(TestDataGen.fineBooksGen) { testBooks =>
+      val someBook = testBooks.head
+      assertResponse(
+        testedBooksRoutes(new BooksStub(testBooks)).run(GET(uri"/".withQueryParam("id", someBook.id.value))),
+        Status.Ok,
+        someBook
+      )
+    }
   }
 
-  def testInvalidBookRequests(request: Request[IO], expectedStatus: org.http4s.Status, expectedBody: String) = {
-    testBookRoute(
-      Map.empty,
-      testedApp => assertFailedResponse(testedApp.run(request), expectedStatus, expectedBody)
-    )
-  }
-
-  // ----------------------  book category ------------------------------
-
-  // this is just testing the route itself, in the positive scenario
-  test("getting a pre-existing book category should work") {
-    PropF.forAllF(TestData.fineBooksGen) { testBooks =>
-      val (bookId, book) = testBooks.head
-      testBookRoute(
-        testData = testBooks,
-        test = testedApp =>
-          assertOkResponse(
-            testedApp.run(GET(Uri.unsafeFromString(s"?id=${bookId.value}"))),
-            book
-          )
+  test("creating a book should yield an id") {
+    PropF.forAllF(TestDataGen.rawCreateBookGen) { createBook =>
+      assertResponse(
+        testedBooksRoutes().run(POST(createBook, uri"/")),
+        Status.Created,
+        BooksStub.createdId.value
       )
     }
   }
 
   test("invalid book id query param should yield correct error message") {
-    testInvalidBookRequests(
-      GET(uri"?id=someinvaliduuid"),
+    assertFailedResponse(
+      testedBooksRoutes().run(GET(uri"/".withQueryParam("id", "someinvaliduuid"))),
       Status.BadRequest,
       "Invalid query param 'id': is not a valid UUID"
     )
   }
 
-  test("posting well formed json category with all (invalid) empty fields should yield an error about both fields") {
-    testInvalidBookRequests(
-      POST(Book("", "", "", 0, List("", ""), ""), uri""),
+  test("posting well formed json book with all empty fields should yield all errors, without echoing the input") {
+    assertFailedResponse(
+      testedBooksRoutes().run(POST(CatalogRoutes.RawCreateBook("", "", 0, List("", ""), ""), uri"/")),
       Status.BadRequest,
-      "id is not a valid UUID, title should not be empty, authorId is not a valid UUID, publicationYear should be a year in [1800, 2200], categories is not a valid UUID, categories is not a valid UUID"
+      "title should not be empty, authorId is not a valid UUID, publicationYear should be a year in [1800, 2200], categoryIds is not a valid UUID, categoryIds is not a valid UUID"
     )
   }
 
-  // ---------------------------------- data validation ---------------------------
+  class BooksStub(data: List[Books.Book] = List.empty) extends Books {
+    def get(id: Books.BookId) = IO.pure(data.find(_.id == id))
+    def create(createBook: Books.CreateBook) = IO.pure(BooksStub.createdId)
+  }
 
-  test("valid raw book should correctly be converted to domain") {
-    import CatalogRoutes._
-    Prop.forAll(TestData.fineBookGen) { fineBook =>
-      val rawBook = new Book(
-        fineBook.id.value,
-        fineBook.title.value,
-        fineBook.authorId.value,
-        fineBook.publicationYear.value,
-        fineBook.categories.map(_.value),
-        fineBook.summary
-      )
-      assertEquals(rawBook.asDomain, Validated.valid(fineBook))
-    }
+  object BooksStub {
+    val createdId = makeId[Books.BookId].toOption.get
   }
 
 }

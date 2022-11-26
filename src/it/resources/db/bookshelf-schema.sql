@@ -16,7 +16,7 @@ insert into author (id, first_name, last_name) values ('eb7fdd9f-68a6-491d-9a1b-
 -- Book category
 CREATE TABLE IF NOT EXISTS category (
     id varchar(36) NOT NULL,
-    name varchar(25) NOT NULL,
+    name varchar(25) NOT NULL UNIQUE,
     description text
 );
 ALTER TABLE category ADD CONSTRAINT category_pkey PRIMARY KEY (id);

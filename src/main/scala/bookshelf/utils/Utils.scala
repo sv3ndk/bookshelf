@@ -1,13 +1,9 @@
 package bookshelf.utils
 
-import cats.MonadThrow
-import cats.data.Kleisli
 import cats.data.Validated
 import cats.data.Validated.Invalid
 import cats.data.Validated.Valid
 import cats.data.ValidatedNel
-import cats.effect.IO
-import cats.effect.Ref
 import cats.syntax.applicative._
 import cats.syntax.applicativeError._
 import cats.syntax.either._
@@ -28,34 +24,10 @@ import org.http4s.Request
 import org.http4s.Response
 import org.http4s.dsl.impl.ValidatingQueryParamDecoderMatcher
 
-object effect {
-
-  /** Map with an effectful API, handy for mocking some DB with an in-memory mock
-    */
-  trait EffectMap[F[_], K, V] {
-    def getAll: F[List[(K, V)]]
-    def getAllValues: F[List[V]]
-    def get(key: K): F[Option[V]]
-    def add(key: K, value: V): F[K]
-    def remove(key: K): F[Unit]
-  }
-
-  object EffectMap {
-    def make[F[_]: MonadThrow: Ref.Make, K, V](init: Map[K, V] = Map.empty[K, V]): F[EffectMap[F, K, V]] = {
-      Ref
-        .ofEffect(init.pure[F])
-        .map { state =>
-          new EffectMap[F, K, V] {
-            def getAll: F[List[(K, V)]] = state.get.map(_.toList)
-            def getAllValues: F[List[V]] = getAll.map(_.map(_._2))
-            def get(key: K): F[Option[V]] = state.get.map(_.get(key))
-            def add(key: K, value: V): F[K] = state.update(_ + (key -> value)).as(key)
-            def remove(key: K): F[Unit] = state.update(_.removed(key))
-          }
-        }
-    }
-  }
-}
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+import _root_.cats.effect.IO
 
 object validation {
 
@@ -123,13 +95,13 @@ object validation {
         }
   }
 
-  def validated[A](validated: ValidatedNel[ParseFailure, A]): IO[A] =
+  def validated[A](validated: ValidatedNel[ParseFailure, A]): Try[A] =
     validated match {
-      case Invalid(e) =>
-        val mergedSanitized = e.toList.map(_.sanitized).mkString(",").trim()
-        val mergedDetails = e.toList.map(_.details).mkString(",")
-        IO.raiseError(ParseFailure(mergedSanitized, mergedDetails))
-      case Valid(a) => IO.pure(a)
+      case Invalid(failures) =>
+        val mergedSanitized = failures.map(_.sanitized).toList.mkString(",").trim()
+        val mergedDetails = failures.map(_.details).toList.mkString(",")
+        Failure(ParseFailure(mergedSanitized, mergedDetails))
+      case Valid(a) => Success(a)
     }
 }
 
@@ -143,5 +115,11 @@ object core {
         err => Left(new TechnicalError(err)),
         a => Right(a)
       )
+}
 
+object debug {
+
+  implicit class BookshelfIoOps[A](val ioa: IO[A]) extends AnyVal {
+    def debug: IO[A] = ioa.map(a => { println(s"$a\n"); a })
+  }
 }

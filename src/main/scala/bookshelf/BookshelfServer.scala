@@ -35,7 +35,7 @@ import org.http4s.server.middleware.Logger
 
 object BookshelfServer {
 
-  val transactor: Resource[IO, HikariTransactor[IO]] =
+  val localHostTransactor: Resource[IO, HikariTransactor[IO]] =
     for {
       ce <- ExecutionContexts.fixedThreadPool[IO](2)
       xa <- HikariTransactor.newHikariTransactor[IO](
@@ -63,9 +63,10 @@ object BookshelfServer {
     finalHttpApp
   }
 
+  val localBookshelfApp: Resource[IO, HttpApp[IO]] = localHostTransactor.map(bookshelfApp)
+
   def server: IO[Nothing] =
-    transactor
-      .map(xa => bookshelfApp(xa))
+    localBookshelfApp
       .flatMap(app =>
         EmberServerBuilder
           .default[IO]

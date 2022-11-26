@@ -38,8 +38,8 @@ Toy application to handle books and bookshelves, as an excuse to play with Typel
 
 * most operations are super simple CRUD stuff => 3 simple layers:
     * http: responsible for web routing, (de)serialization, authentication...
+    * services: business scenario (when they exist), definition of dB transaction boundaries, creation of entity id, retries and fall-back strategy
     * persistence: interraction with DB
-    * services: business scenario (when they exist), definition of dB transaction boundaries, retries, fall-back strategy
 * I'm not using tagless final but rather committing to the concrete IO effect
 * the transaction boundary is defined in the application entrypoint, i.e. the http layer. It's a bit unclean since it makes the http layer
   in charge of a persistence concern, but it keeps things simple. As the application grows, we could move that concern to a business layer
@@ -58,10 +58,8 @@ Toy application to handle books and bookshelves, as an excuse to play with Typel
 * core: cats and cats-effect
 * rest layer: http4s
 * data validation: refined
-* persistence: Doobie and postgres
-* unit-tests: munit and scalacheck
-
-
+* persistence: doobie, postgreSQL
+* tests: munit, scalacheck, testcontainers-scala
 
 # Lessons learnt:
 
@@ -80,7 +78,7 @@ import org.http4s.circe.CirceEntityCodec._
 
 * stack traces in app written with Cats are pretty much unusable since they often show mostly pluming technical info as opposed to pointing to the source of the issue 
 
-* Tagless final is probably overly-generalization that adds an additional layer of abstraction for little added value. OTOH we end up with all functions returning `IO[Stuff]` which is a bit the effect equivalent of returning `Object` everywhere, it's super broad. Ideally, we should seek opportunities to express logic as simple functions outside of any effect, and delegate to it from and effectful layer.
+* My current feeling towads tagless final is that it's probably overly-generalization, adding an additional layer of abstraction for little added value. OTOH without it we end up with all functions returning `IO[Stuff]` which is a bit the effect equivalent of returning `Object` everywhere, it's super broad. Ideally, we should seek opportunities to express business logic as simple functions outside of any effect, and delegate to it from and effectful layer using `IO.fromEither(...)` or so.
 
 Further notes:
 
@@ -93,14 +91,12 @@ Further notes:
 
 TODO:
 * add persistence layer:
-  * fix missign category when saving a book
-  * fix current UTs + add a few
-  * convert the demo client to an integration test, using testcontainer scala https://github.com/testcontainers/testcontainers-scala
+  * finish integration tests: add more scenarios + add calls to Doobie query check() as part of integration test
   * improve error handling: empty list in json input, non-existing author id when creating a book,...
   * add ability to update and delete
-  * add calls to Doobie query check() as part of integration test
+  * add pagination to book and author queries
 
-* add pagination to book and author queries
+
 * logging
 * retry strategy
 * authentication + profile domain

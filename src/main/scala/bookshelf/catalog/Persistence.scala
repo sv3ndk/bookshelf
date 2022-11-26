@@ -1,8 +1,8 @@
 package bookshelf.catalog
 
-import bookshelf.utils.effect.EffectMap
+import bookshelf.utils.core.TechnicalError
+import bookshelf.utils.core.makeId
 import bookshelf.utils.validation
-import bookshelf.utils.core.{makeId, TechnicalError}
 import bookshelf.utils.validation.AsDetailedValidationError
 import cats.MonadThrow
 import cats.effect.Concurrent
@@ -11,6 +11,7 @@ import cats.effect.Ref
 import cats.effect.kernel.Resource
 import cats.effect.syntax.async
 import cats.syntax.applicative._
+import cats.syntax.traverse._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import doobie._
@@ -43,6 +44,7 @@ object CategoriesDb extends doobie.refined.Instances {
         select id, name, description 
         from category
         where name = $name
+        limit 1
         """.query[Category]
 
     def create(id: CategoryId, createCategory: CreateCategory) =
@@ -87,7 +89,9 @@ object BooksDb extends doobie.refined.Instances {
           Some(Book(id, title, author, year, oneCategory.toList ++ moreRows.flatMap(_._3), summary))
       }
   }
-  def create(id: BookId, createBook: CreateBook) = Queries.create(id, createBook).run.as(id)
+  def create(id: BookId, createBook: CreateBook) =
+    Queries.create(id, createBook).run >>
+      createBook.categoryIds.traverse(categoryId => Queries.addCategory(id, categoryId).run).as(id)
 
   case class BookRow(title: BookTitle, year: BookPublicationYear, summary: BookSummary)
 
@@ -107,11 +111,13 @@ object BooksDb extends doobie.refined.Instances {
         book.id = $bookId
       """.query[(BookRow, Authors.Author, Option[Categories.Category])]
 
-    def create(bookId: BookId, createBook: CreateBook) = {
+    def create(bookId: BookId, createBook: CreateBook) =
       sql"""
         insert into book (id, title, author_id, publication_year, summary)
         values ($bookId, ${createBook.title}, ${createBook.authorId}, ${createBook.publicationYear}, ${createBook.summary})
       """.update
-    }
+
+    def addCategory(bookId: BookId, categoryId: Categories.CategoryId) =
+      sql"insert into book_category (book_id, category_id) values ($bookId, $categoryId)".update
   }
 }

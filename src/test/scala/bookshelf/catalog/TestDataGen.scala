@@ -9,28 +9,7 @@ import eu.timepit.refined.string.Uuid
 import org.scalacheck.Gen
 import eu.timepit.refined._
 
-object TestData {
-  def mockCategoriesService(data: Map[Categories.CategoryName, Categories.Category]): IO[Categories] =
-    effect.EffectMap
-      .make[IO, Categories.CategoryName, Categories.Category](data)
-      .map { state =>
-        new Categories {
-          def getAll = state.getAllValues
-          def get(name: Categories.CategoryName) = state.get(name)
-          def add(category: Categories.Category) = state.add(category.name, category)
-        }
-      }
-
-  def mockBooksService(data: Map[Books.BookId, Books.Book]): IO[Books] =
-    effect.EffectMap
-      .make[IO, Books.BookId, Books.Book](data)
-      .map { state =>
-        new Books {
-          // def add(book: Books.Book) = state.add(book.id, book)
-          def get(id: Books.BookId) = state.get(id)
-        }
-      }
-
+object TestDataGen {
   val nonEmptyAlphaNumString: Gen[String] = for {
     first <- Gen.alphaNumChar
     rest <- Gen.alphaNumStr
@@ -48,7 +27,7 @@ object TestData {
   val genNonEmpytString: Gen[String Refined NonEmpty] = refinedGen(nonEmptyAlphaNumString)
   val genUuid: Gen[String Refined Uuid] = refinedGen(Gen.uuid.map(_.toString()))
   val genUuidList: Gen[List[String Refined Uuid]] = Gen.listOf(genUuid)
-  val nameGen: Gen[Categories.CategoryName] =
+  val categoryNameGen: Gen[Categories.CategoryName] =
     refinedGen(
       Gen
         .choose(1, 25)
@@ -57,23 +36,42 @@ object TestData {
 
   val publicationYearGen: Gen[Books.BookPublicationYear] = refinedGen(Gen.choose(1801, 2199))
 
+  val rawCreateCategoryGen: Gen[CatalogRoutes.RawCreateCategory] = for {
+    name <- categoryNameGen
+    description <- nonEmptyAlphaNumString
+  } yield CatalogRoutes.RawCreateCategory(name.value, description)
+
   val fineCategoryGen: Gen[Categories.Category] = for {
     id <- genUuid
-    name <- nameGen
+    name <- categoryNameGen
     description <- genNonEmpytString
   } yield Categories.Category(id, name, description)
 
-  val fineCategoriesGen: Gen[Map[Categories.CategoryName, Categories.Category]] = fakeDb(fineCategoryGen)(_.name)
+  val fineCategoriesGen: Gen[List[Categories.Category]] = Gen.nonEmptyListOf(fineCategoryGen)
+
+  val fineAuthorGen: Gen[Authors.Author] = for {
+    id <- genUuid
+    firstName <- genNonEmpytString
+    lastName <- genNonEmpytString
+  } yield Authors.Author(id, firstName, lastName)
+
+  val rawCreateBookGen: Gen[CatalogRoutes.RawCreateBook] = for {
+    title <- genNonEmpytString
+    authorId <- genUuid
+    year <- publicationYearGen
+    ids <- genUuidList
+    summary <- nonEmptyAlphaNumString
+  } yield CatalogRoutes.RawCreateBook(title.value, authorId.value, year.value, ids.map(_.value), summary)
 
   val fineBookGen: Gen[Books.Book] = for {
     id <- genUuid
     title <- genNonEmpytString
-    authorId <- genUuid
+    author <- fineAuthorGen
     year <- publicationYearGen
-    categories <- genUuidList
+    categories <- fineCategoriesGen
     summary <- nonEmptyAlphaNumString
-  } yield Books.Book(id, title, authorId, year, categories, summary)
+  } yield Books.Book(id, title, author, year, categories, summary)
 
-  val fineBooksGen: Gen[Map[Books.BookId, Books.Book]] = fakeDb(fineBookGen)(_.id)
+  val fineBooksGen: Gen[List[Books.Book]] = Gen.nonEmptyListOf(fineBookGen)
 
 }

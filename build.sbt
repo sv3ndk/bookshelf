@@ -5,17 +5,21 @@ val CirceVersion = "0.14.3"
 val RefinedVersion = "0.10.1"
 val DoobieVersion = "1.0.0-RC1"
 val HikariCPVersion = "5.0.1"
-val LogbackVersion = "1.4.4"
+val LogbackVersion = "1.4.5"
 
 val MunitVersion = "0.7.29"
 val ScalacheckVersion = "1.0.4"
+val TestcontainersScalaVersion = "0.40.11"
 
 lazy val root = (project in file("."))
+  .configs(IntegrationTest)
   .settings(
     organization := "svend.playground",
-    name := "bike-configurator",
+    name := "bookshelf",
     version := "0.0.0",
     scalaVersion := "2.13.10",
+    Defaults.itSettings,
+    IntegrationTest / fork := true,
     libraryDependencies ++= Seq(
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
       "org.http4s" %% "http4s-ember-server" % Http4sVersion,
@@ -31,11 +35,12 @@ lazy val root = (project in file("."))
       "org.tpolecat" %% "doobie-hikari" % DoobieVersion,
       "org.tpolecat" %% "doobie-refined" % DoobieVersion,
       "com.zaxxer" % "HikariCP" % HikariCPVersion,
-      "org.scalameta" %% "munit" % MunitVersion % Test,
+      "org.scalameta" %% "munit" % MunitVersion % "it, test",
+      "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % "it, test",
       "org.scalameta" %% "munit-scalacheck" % MunitVersion % Test,
-      "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % Test,
       "org.typelevel" %% "scalacheck-effect" % ScalacheckVersion % Test,
-      "org.typelevel" %% "scalacheck-effect-munit" % ScalacheckVersion % Test
+      "org.typelevel" %% "scalacheck-effect-munit" % ScalacheckVersion % Test,
+      "com.dimafeng" %% "testcontainers-scala-munit" % TestcontainersScalaVersion % "it, test"
     ),
     addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.2" cross CrossVersion.full),
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),

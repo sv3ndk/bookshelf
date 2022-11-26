@@ -1,7 +1,8 @@
 package bookshelf.catalog
 
-import bookshelf.BookshelfServer
+import bookshelf.utils.core
 import bookshelf.catalog.CatalogRoutes
+import bookshelf.utils.core.makeId
 import bookshelf.catalog.Categories
 import bookshelf.utils.TestUtils
 import bookshelf.utils.effect.EffectMap
@@ -36,81 +37,88 @@ import org.scalacheck.Gen
 import org.scalacheck.Prop._
 import org.scalacheck.effect.PropF
 import org.scalacheck.Prop
-import _root_.cats.data.Validated
 
 class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSuite {
 
-  // ----------------------
+  def testedCategoryRoutes(stub: CategoriesStub = new CategoriesStub()) =
+    ErrorHandling.Recover.messageFailure(CatalogRoutes.categoryRoutes(stub).orNotFound)
 
-  def testCategoryRoute(
-      testData: Map[Categories.CategoryName, Categories.Category],
-      test: HttpApp[IO] => IO[Unit]
-  ): IO[Unit] = {
-    for {
-      mockCategories <- TestData.mockCategoriesService(testData)
-      testedApp = ErrorHandling.Recover.messageFailure(CatalogRoutes.categoryRoutes(mockCategories).orNotFound)
-      result <- test(testedApp)
-    } yield result
-  }
-
-  def testInvalidCategoryRequests(request: Request[IO], expectedStatus: org.http4s.Status, expectedBody: String) = {
-    testCategoryRoute(
-      Map.empty,
-      testedApp => assertFailedResponse(testedApp.run(request), expectedStatus, expectedBody)
-    )
-  }
-
-  // ----------------------  book category ------------------------------
-
-  // this is just testing the route itself, in the positive scenario
-  test("getting a pre-existing book category should work") {
-    PropF.forAllF(TestData.fineCategoriesGen) { testCategories =>
-      val (categoryId, category) = testCategories.head
-      testCategoryRoute(
-        testData = Map(category.name -> category),
-        test = testedApp =>
-          assertOkResponse(
-            testedApp.run(GET(Uri.unsafeFromString(s"?name=${categoryId.value}"))),
-            category
-          )
+  test("getting a pre-existing book category") {
+    PropF.forAllF(TestDataGen.fineCategoriesGen) { testCategories =>
+      val someCategory = testCategories.head
+      assertResponse(
+        testedCategoryRoutes(new CategoriesStub(testCategories))
+          .run(GET(uri"/".withQueryParam("name", someCategory.name.value))),
+        Status.Ok,
+        someCategory
       )
     }
   }
 
-  test("invalid category name query param should yield correct error message, without echoing input") {
-    testInvalidCategoryRequests(
-      GET(uri"?name="),
+  test("getting all pre-existing books categories") {
+    PropF.forAllF(TestDataGen.fineCategoriesGen) { testCategories =>
+      assertResponse(
+        testedCategoryRoutes(new CategoriesStub(testCategories)).run(GET(uri"/all")),
+        Status.Ok,
+        testCategories
+      )
+    }
+  }
+
+  test("creating a category with a valid request") {
+    PropF.forAllF(TestDataGen.rawCreateCategoryGen) { createCategory =>
+      assertResponse(
+        testedCategoryRoutes().run(POST(createCategory, uri"/")),
+        Status.Created,
+        CategoriesStub.createdId.value
+      )
+    }
+  }
+
+  test("creating a category with no name should fail without echoing the input back") {
+    PropF.forAllF(TestDataGen.rawCreateCategoryGen) { createCategory =>
+      assertFailedResponse(
+        testedCategoryRoutes().run(POST(createCategory.copy(name = ""), uri"/")),
+        Status.BadRequest,
+        "name must be between 1 and 25 char long"
+      )
+    }
+  }
+
+  test("creating a category with no description should fail without echoing the input back") {
+    PropF.forAllF(TestDataGen.rawCreateCategoryGen) { createCategory =>
+      assertFailedResponse(
+        testedCategoryRoutes().run(POST(createCategory.copy(description = ""), uri"/")),
+        Status.BadRequest,
+        "description should not be empty"
+      )
+    }
+  }
+
+  test("creating a category with 2 empty field should fail with both errors without echoing the input back") {
+    assertFailedResponse(
+      testedCategoryRoutes().run(POST(CatalogRoutes.RawCreateCategory("", ""), uri"/")),
       Status.BadRequest,
-      "Invalid query param 'name': must be between 1 and 25 char long"
+      "name must be between 1 and 25 char long, description should not be empty"
     )
   }
 
-  test(
-    "posting well formed json category with 2 (invalid) empty fields should yield an error about both fields, without echoing input"
-  ) {
-    testInvalidCategoryRequests(
-      POST(CatalogRoutes.RawCategory("", "", ""), uri""),
-      Status.BadRequest,
-      "id is not a valid UUID, name must be between 1 and 25 char long, description should not be empty"
-    )
-  }
-
-  test("malformed json body should yield correct error message, without echoing input") {
-    testInvalidCategoryRequests(
-      POST("{ this is not valid JSON", uri"/"),
+  test("creating a category with 2 empty field should fail with both errors without echoing the input back") {
+    assertFailedResponse(
+      testedCategoryRoutes().run(POST("{ this is not valid JSON", uri"/")),
       Status.UnprocessableEntity,
       "The request body was invalid."
     )
   }
 
-  // ---------------------------------- data validation ---------------------------
+  class CategoriesStub(data: List[Categories.Category] = List.empty) extends Categories {
+    def get(name: Categories.CategoryName) = IO.pure(data.find(_.name == name))
+    def getAll = IO.pure(data)
+    def create(category: Categories.CreateCategory) = IO.pure(CategoriesStub.createdId)
+  }
 
-  test("valid raw category should correctly be converted to domain") {
-    import CatalogRoutes._
-    Prop.forAll(TestData.fineCategoryGen) { fineCategory =>
-      val rawCategory = new RawCategory(fineCategory.id.value, fineCategory.name.value, fineCategory.description.value)
-      assertEquals(rawCategory.asDomain, Validated.valid(fineCategory))
-    }
+  object CategoriesStub {
+    val createdId = makeId[Categories.CategoryId].toOption.get
   }
 
 }
