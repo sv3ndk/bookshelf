@@ -1,6 +1,5 @@
 package bookshelf.catalog
 
-import bookshelf.utils.effect
 import cats.effect.IO
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.api.Validate

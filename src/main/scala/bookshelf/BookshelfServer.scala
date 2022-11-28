@@ -33,19 +33,28 @@ import org.http4s.server.Router
 import org.http4s.server.middleware.ErrorHandling
 import org.http4s.server.middleware.Logger
 
+case class Config(
+    rdbmsHost: String,
+    rdbmsPort: Int
+)
+
 object BookshelfServer {
 
-  val localHostTransactor: Resource[IO, HikariTransactor[IO]] =
+  def localHostTransactor(config: Config): Resource[IO, HikariTransactor[IO]] = {
+
+    val connectionString = s"jdbc:postgresql://${config.rdbmsHost}:${config.rdbmsPort}/bookshelf"
+
     for {
       ce <- ExecutionContexts.fixedThreadPool[IO](2)
       xa <- HikariTransactor.newHikariTransactor[IO](
         "org.postgresql.Driver",
-        "jdbc:postgresql:bookshelf",
+        connectionString,
         "testuser",
         "testpassword",
         ce
       )
     } yield xa
+  }
 
   def bookshelfApp(xa: Transactor[IO]): HttpApp[IO] = {
     val httpApp = Router
@@ -63,10 +72,11 @@ object BookshelfServer {
     finalHttpApp
   }
 
-  val localBookshelfApp: Resource[IO, HttpApp[IO]] = localHostTransactor.map(bookshelfApp)
+  def localBookshelfApp(config: Config): Resource[IO, HttpApp[IO]] =
+    localHostTransactor(config).map(bookshelfApp)
 
-  def server: IO[Nothing] =
-    localBookshelfApp
+  def server(config: Config): IO[Nothing] =
+    localBookshelfApp(config)
       .flatMap(app =>
         EmberServerBuilder
           .default[IO]
@@ -79,6 +89,11 @@ object BookshelfServer {
 }
 
 object BookshelfServerApp extends IOApp {
+
+  val localDockerConfig = Config(
+    rdbmsHost = "localhost",
+    rdbmsPort = 5432
+  )
   def run(args: List[String]) =
-    BookshelfServer.server.as(ExitCode.Success)
+    BookshelfServer.server(localDockerConfig).as(ExitCode.Success)
 }

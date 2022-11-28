@@ -24,7 +24,7 @@ import org.http4s.headers._
 import org.http4s.implicits._
 
 trait BookshelfClient {
-  def getCategory(name: String): IO[Category]
+  def getCategory(name: CategoryName): IO[Category]
   def getAllCategories: IO[List[Category]]
   def createCategory(createCategory: CreateCategory): IO[CategoryId]
   def getAuthor(id: AuthorId): IO[Author]
@@ -49,9 +49,9 @@ object BookshelfClient {
     def POST[B](body: B, uri: Uri)(implicit ec: EntityEncoder[IO, B]): Request[IO] =
       Method.POST(body, uri, Accept(MediaType.application.json))
 
-    def getCategory(name: String) =
+    def getCategory(name: CategoryName) =
       IO.println(s"fetching category $name") >>
-        httpClient.expect[Category](GET(catalogUri / "category" +? ("name", name)))
+        httpClient.expect[Category](GET(catalogUri / "category" +? ("name", name.value)))
     val getAllCategories =
       IO.println(s"fetching all categories") >> httpClient.expect[List[Category]](GET(catalogUri / "category" / "all"))
 

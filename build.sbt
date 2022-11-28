@@ -37,9 +37,9 @@ lazy val root = (project in file("."))
       "com.zaxxer" % "HikariCP" % HikariCPVersion,
       "org.scalameta" %% "munit" % MunitVersion % "it, test",
       "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % "it, test",
-      "org.scalameta" %% "munit-scalacheck" % MunitVersion % Test,
-      "org.typelevel" %% "scalacheck-effect" % ScalacheckVersion % Test,
-      "org.typelevel" %% "scalacheck-effect-munit" % ScalacheckVersion % Test,
+      "org.scalameta" %% "munit-scalacheck" % MunitVersion % "it, test",
+      "org.typelevel" %% "scalacheck-effect" % ScalacheckVersion % "it, test",
+      "org.typelevel" %% "scalacheck-effect-munit" % ScalacheckVersion % "it, test",
       "com.dimafeng" %% "testcontainers-scala-munit" % TestcontainersScalaVersion % "it, test"
     ),
     addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.2" cross CrossVersion.full),
