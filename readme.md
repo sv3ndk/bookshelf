@@ -30,22 +30,51 @@ Toy application to handle books and bookshelves, as an excuse to play with Typel
   * add ratings to books
 
 
+# How to run
+
+## Tests:
+
+Unit tests:
+```scala
+// from sbt shell
+test
+```
+
+Integration tests:
+```scala
+// from sbt shell
+IntegrationTest/test
+```
+
+## Demo client app:
+
+Start test environment:
+```shell
+docker-compose  -f ./src/it/resources/docker-compose.yml up
+```
+
+Then launch the app and the demo:
+```scala
+// start the app from one sbt shell:
+runMain bookshelf.BookshelfServerApp
+
+// start the demo from another sbt shell:
+runMain bookshelf.clientdemo.ClientDemo
+```
+
 
 # Design:
 
 
-## KISS code structure
+## code structure
 
 * most operations are super simple CRUD stuff => 3 simple layers:
-    * http: responsible for web routing, (de)serialization, authentication...
-    * services: business scenario (when they exist), definition of dB transaction boundaries, creation of entity id, retries and fall-back strategy
-    * persistence: interraction with DB
+    *  `Http`: responsible for web routing, (de)serialization, authentication...
+    * `Services`: business scenario (when they exist), definition of dB transaction boundaries, creation of entity id, retries and fall-back strategy
+    * `Persistence`: interraction with DB
 * I'm not using tagless final but rather committing to the concrete IO effect
-* the transaction boundary is defined in the application entrypoint, i.e. the http layer. It's a bit unclean since it makes the http layer
-  in charge of a persistence concern, but it keeps things simple. As the application grows, we could move that concern to a business layer
 * I followed the mantra "package together things that change together", s.t. things are grouped in folder per domain (`catalog`, `session`,..) 
   instead of grouping them by technical concern (e.g. `model`, `http`, `persistence`,...)
-
 
 ## domains
   * `catalog`: handling of the book catalog available on the site, including search
@@ -74,11 +103,13 @@ import org.http4s.circe.CirceEntityCodec._
 
 * error handling in http4s can either be specifically in each route, or else for repetitive stuff we can let the `MessageFailure` "bubbleUp" and use a middleware to transform it. I crafted a middleware that returns quite a verbose message, it's probably not the most secure option.
 
+* Doobie check() is quite good at detecting compatibility of the query with the scala types
+
 * I don't like implicits, they fail in obscure ways when the relevant imports are missing, especially when a chain of them is necessary (e.g. a functio requireing an implicit entity decorer, itself requiring a json decoder, itself requiring a refined type decoder...), as a user I need to understand lot's of implementation details to fix my bugs when I used them incorrectly.
 
 * stack traces in app written with Cats are pretty much unusable since they often show mostly pluming technical info as opposed to pointing to the source of the issue 
 
-* My current feeling towads tagless final is that it's probably overly-generalization, adding an additional layer of abstraction for little added value. OTOH without it we end up with all functions returning `IO[Stuff]` which is a bit the effect equivalent of returning `Object` everywhere, it's super broad. Ideally, we should seek opportunities to express business logic as simple functions outside of any effect, and delegate to it from and effectful layer using `IO.fromEither(...)` or so.
+* My current feeling towards tagless final is that it's probably overly-generalization, adding an additional layer of abstraction for little added value. OTOH without it we end up with all functions returning `IO[Stuff]` which is a bit the effect equivalent of returning `Object` everywhere, it's super broad. Ideally, we should seek opportunities to express business logic as simple functions outside of any effect, and delegate to it from and effectful layer using `IO.fromEither(...)` or so.
 
 Further notes:
 
@@ -91,7 +122,7 @@ Further notes:
 
 TODO:
 * add persistence layer:
-  * finish integration tests: add more scenarios + add calls to Doobie query check() as part of integration test
+  * finish integration tests: add more scenarios 
   * improve error handling: empty list in json input, non-existing author id when creating a book,...
   * add ability to update and delete
   * add pagination to book and author queries

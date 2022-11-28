@@ -50,13 +50,14 @@ object validation {
       }
   }
 
-  // Custom version of refined refineV(), with 3 updates:
-  //  - using our ToDetailedValidationErr to produce detailed error messages
-  //  - optionally, a logical name can be specified to make the error more meaningful
-  //  - is invoked with the target Refined[T, P], which I find more friendly to end-users than P
-  def refineVDetailed[RTP] = new RefinedPartiallyApplied[RTP]
+  /** Custom version of refined refineV(), with 3 updates:
+    *   - using our ToDetailedValidationErr to produce detailed error messages
+    *   - optionally, a logical name can be specified to make the error more meaningful
+    *   - is invoked with the target Refined[T, P], which I find more friendly to end-users than P
+    */
+  def refineDetailed[RTP] = new RefinedDetailedPartiallyApplied[RTP]
 
-  class RefinedPartiallyApplied[RTP] {
+  class RefinedDetailedPartiallyApplied[RTP] {
     def apply[T, P](
         rawValue: T,
         name: String = ""
@@ -69,13 +70,37 @@ object validation {
     }
   }
 
+  /** Same as refineDetailed(), but for an optional input, considering None as a valid non-present value, yielding a
+    * Right(None).
+    *
+    * (I tried to express this with OptionT and Either, though since None is "good", I can't find an elegant way to make
+    * it work ).
+    */
+  def refineOptDetailed[RTP] = new RefineOptDetailed[RTP]
+
+  class RefineOptDetailed[RTP] {
+    def apply[T, P](
+        rawValue: Option[T],
+        name: String = ""
+    )(implicit
+        ev: RTP =:= Refined[T, P],
+        v: Validate[T, P],
+        asDetailedErr: AsDetailedValidationError[P]
+    ): Either[ParseFailure, Option[Refined[T, P]]] = {
+      rawValue match {
+        case None => Right(None)
+        case Some(value) =>
+          refineDetailed(value, name).map(Some(_))
+      }
+    }
+  }
+
   // derived http4s QueryParamDecoder[Refined[T, P]] based on some existing QueryParamDecoder[T]
   // and our custom validation for refined types
   implicit def refinedQueryParamDecoder[T: QueryParamDecoder, P](implicit
       ev: Validate[T, P],
       asDetailedErr: AsDetailedValidationError[P]
-  ): QueryParamDecoder[T Refined P] = QueryParamDecoder[T]
-    .emap(refineVDetailed[T Refined P](_))
+  ): QueryParamDecoder[T Refined P] = QueryParamDecoder[T].emap(refineDetailed(_))
 
   // essentially just a copy of ValidatingQueryParamDecoderMatcher which adds the param name to the error
   // QP is typially a Refined[T, P], although this matcher is agnostic of that

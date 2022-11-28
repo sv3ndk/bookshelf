@@ -37,6 +37,7 @@ lazy val root = (project in file("."))
       "com.zaxxer" % "HikariCP" % HikariCPVersion,
       "org.scalameta" %% "munit" % MunitVersion % "it, test",
       "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % "it, test",
+      "org.tpolecat" %% "doobie-munit" % DoobieVersion % "it, test",
       "org.scalameta" %% "munit-scalacheck" % MunitVersion % "it, test",
       "org.typelevel" %% "scalacheck-effect" % ScalacheckVersion % "it, test",
       "org.typelevel" %% "scalacheck-effect-munit" % ScalacheckVersion % "it, test",

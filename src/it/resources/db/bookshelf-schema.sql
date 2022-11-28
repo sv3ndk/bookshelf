@@ -10,7 +10,7 @@ ALTER TABLE author ADD CONSTRAINT author_pkey PRIMARY KEY (id);
 CREATE TABLE IF NOT EXISTS category (
     id varchar(36) NOT NULL,
     name varchar(25) NOT NULL UNIQUE,
-    description text
+    description text NOT NULL
 );
 ALTER TABLE category ADD CONSTRAINT category_pkey PRIMARY KEY (id);
 

@@ -1,17 +1,15 @@
 package bookshelf.catalog
 
-import bookshelf.utils.core
 import bookshelf.catalog.CatalogRoutes
-import bookshelf.utils.core.makeId
 import bookshelf.catalog.Categories
 import bookshelf.utils.TestUtils
-import bookshelf.utils.effect.EffectMap
+import bookshelf.utils.core
+import bookshelf.utils.core.makeId
+import cats.data.Validated.Invalid
+import cats.data.Validated.Valid
+import cats.data.ValidatedNel
 import cats.effect.IO
 import cats.syntax.all._
-import cats.data.ValidatedNel
-import cats.data.Validated.Valid
-import cats.data.Validated.Invalid
-
 import eu.timepit.refined._
 import eu.timepit.refined.api.RefType
 import eu.timepit.refined.api.Refined
@@ -34,9 +32,9 @@ import org.http4s.client.dsl.io._
 import org.http4s.implicits._
 import org.http4s.server.middleware.ErrorHandling
 import org.scalacheck.Gen
+import org.scalacheck.Prop
 import org.scalacheck.Prop._
 import org.scalacheck.effect.PropF
-import org.scalacheck.Prop
 
 class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSuite {
 

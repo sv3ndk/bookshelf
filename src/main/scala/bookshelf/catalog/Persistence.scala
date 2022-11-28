@@ -29,13 +29,13 @@ object CategoriesDb extends doobie.refined.Instances {
   import Categories._
 
   def get(name: CategoryName): ConnectionIO[Option[Category]] =
-    Queries.getByName(name).option
+    SQL.getByName(name).option
   def getAll: ConnectionIO[List[Category]] =
-    Queries.getAll.to[List]
+    SQL.getAll.to[List]
   def create(id: CategoryId, createCategory: CreateCategory): ConnectionIO[CategoryId] =
-    Queries.create(id, createCategory).run.as(id)
+    SQL.create(id, createCategory).run.as(id)
 
-  object Queries {
+  object SQL {
 
     val getAll = sql"select id, name, description from category".query[Category]
 
@@ -59,11 +59,11 @@ object CategoriesDb extends doobie.refined.Instances {
 object AuthorsDb extends doobie.refined.Instances {
   import Authors._
 
-  def get(id: AuthorId): ConnectionIO[Option[Author]] = Queries.get(id).option
-  def getAll: ConnectionIO[List[Author]] = Queries.getAll.to[List]
-  def create(id: AuthorId, createAuthor: CreateAuthor) = Queries.create(id, createAuthor).run.as(id)
+  def get(id: AuthorId): ConnectionIO[Option[Author]] = SQL.get(id).option
+  def getAll: ConnectionIO[List[Author]] = SQL.getAll.to[List]
+  def create(id: AuthorId, createAuthor: CreateAuthor) = SQL.create(id, createAuthor).run.as(id)
 
-  object Queries {
+  object SQL {
     def get(id: AuthorId) = sql"select id, first_name, last_name from author where id = $id".query[Author]
     val getAll = sql"select id, first_name, last_name from author".query[Author]
     def create(id: AuthorId, createAuthor: CreateAuthor) =
@@ -80,7 +80,7 @@ object BooksDb extends doobie.refined.Instances {
   import Authors._
 
   def get(id: BookId): ConnectionIO[Option[Book]] = {
-    Queries
+    SQL
       .get(id)
       .to[List]
       .map {
@@ -90,12 +90,12 @@ object BooksDb extends doobie.refined.Instances {
       }
   }
   def create(id: BookId, createBook: CreateBook) =
-    Queries.create(id, createBook).run >>
-      createBook.categoryIds.traverse(categoryId => Queries.addCategory(id, categoryId).run).as(id)
+    SQL.create(id, createBook).run >>
+      createBook.categoryIds.traverse(categoryId => SQL.addCategory(id, categoryId).run).as(id)
 
-  case class BookRow(title: BookTitle, year: BookPublicationYear, summary: BookSummary)
+  case class BookRow(title: BookTitle, year: Option[BookPublicationYear], summary: Option[BookSummary])
 
-  object Queries {
+  object SQL {
 
     def get(bookId: BookId) =
       sql"""
@@ -109,6 +109,7 @@ object BooksDb extends doobie.refined.Instances {
           left join category on book_category.category_id  = category.id
       where 
         book.id = $bookId
+      order by category.name
       """.query[(BookRow, Authors.Author, Option[Categories.Category])]
 
     def create(bookId: BookId, createBook: CreateBook) =

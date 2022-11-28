@@ -1,23 +1,23 @@
 package bookshelf.clientdemo
 
+import bookshelf.AppConfig
 import bookshelf.BookshelfServer
 import bookshelf.BookshelfServerApp
-import bookshelf.Config
 import bookshelf.catalog.Authors._
+import bookshelf.catalog.AuthorsDb
 import bookshelf.catalog.Books
 import bookshelf.catalog.Books._
+import bookshelf.catalog.BooksDb
 import bookshelf.catalog.Categories._
+import bookshelf.catalog.CategoriesDb
+import bookshelf.catalog.DockerComposeIntegrationTests
 import bookshelf.utils.debug._
 import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.IOApp
 import cats.effect.kernel.Resource
-import com.dimafeng.testcontainers.Container
-import com.dimafeng.testcontainers.DockerComposeContainer
-import com.dimafeng.testcontainers.ExposedService
-import com.dimafeng.testcontainers.WaitingForService
-import com.dimafeng.testcontainers.munit.TestContainerForAll
-import com.dimafeng.testcontainers.munit.TestContainerForEach
+import cats.syntax.all._
+import cats.syntax.apply._
 import eu.timepit.refined._
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -46,41 +46,25 @@ import org.testcontainers.containers.wait.strategy.WaitStrategy
 
 import java.io.File
 
-class CatalogIntegration extends CatsEffectSuite with TestContainerForAll {
+class CatalogIntegration extends CatsEffectSuite with DockerComposeIntegrationTests {
 
-  override val containerDef =
-    DockerComposeContainer.Def(
-      new File("src/it/resources/docker-compose.yml"),
-      tailChildContainers = true,
-      exposedServices = Seq(
-        ExposedService("postgres_1", 5432, Wait.forLogMessage(".*database system is ready to accept connections.*", 2))
-      )
-    )
+  // ---- DB query validity tests
 
-  /** Executes this test within an initialized integration environement, i.e.:
-    *   - docker environment is running
-    *   - an http client is available pointing to the appropriate url
-    *   - DB is initialized with test data
-    *
-    * The database is reset before every test
-    */
+  doobieSqlCheck(CategoriesDb.SQL.getByName(refineMV("anyName")))
+  doobieSqlCheck(CategoriesDb.SQL.getAll)
+  doobieSqlCheck(
+    CategoriesDb.SQL.create(trivalId, CreateCategory(refineMV("someName"), refineMV("anyDescription")))
+  )
 
-  def httpTest(label: String)(testWithClient: BookshelfClient => IO[Unit]) =
-    test(label) {
-      withContainers(containers => {
-        val config = Config(
-          rdbmsHost = containers.getServiceHost("postgres_1", 5432),
-          rdbmsPort = containers.getServicePort("postgres_1", 5432)
-        )
-        ClientDemo.populateTestData(config) >>
-          BookshelfServer
-            .localBookshelfApp(config)
-            .map(app => BookshelfClient(Client.fromHttpApp(app)))
-            .use(testWithClient)
-      })
-    }
+  doobieSqlCheck(AuthorsDb.SQL.get(trivalId))
+  doobieSqlCheck(AuthorsDb.SQL.getAll)
+  doobieSqlCheck(
+    AuthorsDb.SQL.create(trivalId, CreateAuthor(refineMV("anything"), refineMV("anything")))
+  )
 
-  // ---------------------------''
+  doobieSqlCheck(BooksDb.SQL.get(trivalId))
+
+  // ----- Integration test scenario
 
   httpTest("creating and retrieving one Author") { httpClient =>
     val createAuthor = CreateAuthor(refineMV("Keyes"), refineMV("Daniel"))
@@ -104,6 +88,48 @@ class CatalogIntegration extends CatsEffectSuite with TestContainerForAll {
         assert(actual.id.value.nonEmpty)
       }
     } yield IO(assertions).void
+  }
+
+  httpTest("create one book with 2 new and 1 existing category and a new author") { httpClient =>
+    val author = CreateAuthor(refineMV("Baricco"), refineMV("Alessandro"))
+    val categoryLocal = CreateCategory(refineMV("Local"), refineMV("c'est arrivé près de chez vous"))
+    val categoryEuropean = CreateCategory(refineMV("European"), refineMV("Litterature from the social continent"))
+
+    for {
+      authorId <- httpClient.createAuthor(author)
+      localCategoryId <- httpClient.createCategory(categoryLocal)
+      europeanCategoryId <- httpClient.createCategory(categoryEuropean)
+      novelCategory <- httpClient.getCategory(refineMV("novel"))
+      bookid <- httpClient.createBook(
+        CreateBook(
+          refineMV("Mr Gwyn"),
+          authorId,
+          Some(refineMV(2011)),
+          List(europeanCategoryId, localCategoryId, novelCategory.id),
+          Some("The celebrated author Jasper Gwyn suddenly and publicly vows never to write another book.")
+        )
+      )
+      actual <- httpClient.getBook(bookid)
+      assertions = {
+        assertEquals(
+          actual.copy(id = trivalId),
+          Book(
+            trivalId,
+            refineMV("Mr Gwyn"),
+            Author(authorId, author.firstName, author.lastName),
+            Some(refineMV(2011)),
+            List(
+              Category(europeanCategoryId, categoryEuropean.name, categoryEuropean.description),
+              Category(localCategoryId, categoryLocal.name, categoryLocal.description),
+              novelCategory
+            ),
+            Some("The celebrated author Jasper Gwyn suddenly and publicly vows never to write another book.")
+          )
+        )
+        assert(actual.id.value.nonEmpty)
+      }
+    } yield IO(assertions).void
+
   }
 
 }

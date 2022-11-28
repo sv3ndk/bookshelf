@@ -33,14 +33,14 @@ import org.http4s.server.Router
 import org.http4s.server.middleware.ErrorHandling
 import org.http4s.server.middleware.Logger
 
-case class Config(
+case class AppConfig(
     rdbmsHost: String,
     rdbmsPort: Int
 )
 
 object BookshelfServer {
 
-  def localHostTransactor(config: Config): Resource[IO, HikariTransactor[IO]] = {
+  def localHostTransactor(config: AppConfig): Resource[IO, HikariTransactor[IO]] = {
 
     val connectionString = s"jdbc:postgresql://${config.rdbmsHost}:${config.rdbmsPort}/bookshelf"
 
@@ -72,10 +72,10 @@ object BookshelfServer {
     finalHttpApp
   }
 
-  def localBookshelfApp(config: Config): Resource[IO, HttpApp[IO]] =
+  def localBookshelfApp(config: AppConfig): Resource[IO, HttpApp[IO]] =
     localHostTransactor(config).map(bookshelfApp)
 
-  def server(config: Config): IO[Nothing] =
+  def server(config: AppConfig): IO[Nothing] =
     localBookshelfApp(config)
       .flatMap(app =>
         EmberServerBuilder
@@ -90,7 +90,7 @@ object BookshelfServer {
 
 object BookshelfServerApp extends IOApp {
 
-  val localDockerConfig = Config(
+  val localDockerConfig = AppConfig(
     rdbmsHost = "localhost",
     rdbmsPort = 5432
   )

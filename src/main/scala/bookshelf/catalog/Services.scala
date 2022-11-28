@@ -90,16 +90,16 @@ object Books {
       id: BookId,
       title: BookTitle,
       author: Authors.Author,
-      publicationYear: BookPublicationYear,
+      publicationYear: Option[BookPublicationYear],
       categories: List[Categories.Category],
-      summary: String
+      summary: Option[String]
   )
   case class CreateBook(
       title: BookTitle,
       authorId: Authors.AuthorId,
-      publicationYear: BookPublicationYear,
+      publicationYear: Option[BookPublicationYear],
       categoryIds: List[Categories.CategoryId],
-      summary: String
+      summary: Option[String]
   )
 
   def make(xa: Transactor[IO]) = new Books {

@@ -2,7 +2,7 @@ package bookshelf.clientdemo
 
 import bookshelf.BookshelfServer
 import bookshelf.BookshelfServerApp
-import bookshelf.Config
+import bookshelf.AppConfig
 import bookshelf.catalog.Authors._
 import bookshelf.catalog.Books
 import bookshelf.catalog.Books._
@@ -53,12 +53,14 @@ object ClientDemo extends IOApp {
             CreateBook(
               refineMV("Into the Sunshine"),
               authorId,
-              refineMV(2018),
+              Some(refineMV(2018)),
               List(
                 catId,
                 refineMV("9d151f50-44ca-44f0-aec4-f06daf6b3659")
               ),
-              "In Part Two of Chris Pountney’s attempt to cycle around the world, a disaster in the Pacific Ocean soon forces a drastic change of plans."
+              Some(
+                "In Part Two of Chris Pountney’s attempt to cycle around the world, a disaster in the Pacific Ocean soon forces a drastic change of plans."
+              )
             )
           )
           _ <- client.getBook(bookId).debug
@@ -66,7 +68,7 @@ object ClientDemo extends IOApp {
       )
   }
 
-  def resetDbTestData(config: Config): IO[Unit] = {
+  def resetDbTestData(config: AppConfig): IO[Unit] = {
     IO.println("Populating DB with test data") >>
       BookshelfServer
         .localHostTransactor(config)

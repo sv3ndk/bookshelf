@@ -1,20 +1,11 @@
 package bookshelf.utils
 
-import cats.data.ValidatedNel
-import cats.data.Validated.{Invalid, Valid}
 import cats.effect.IO
-import cats.MonadThrow
-import cats.effect.unsafe.IORuntime
-import cats.syntax.functor._
-import cats.syntax.traverse._
-import cats.syntax.applicative._
+import munit.Assertions
 import munit.CatsEffectAssertions
 import org.http4s.EntityDecoder
 import org.http4s.Response
 import org.http4s.Status
-import org.http4s.implicits._
-import munit.Assertions
-import cats.effect.Ref
 
 trait TestUtils {
 
@@ -49,33 +40,4 @@ trait TestUtils {
     IO.pure(tested.status).assertEquals(expectedStatus) *>
       assertIO(bodyAsText(tested.body), expectedBody)
 
-}
-
-object effect {
-
-  /** Map with an effectful API, handy for mocking some DB with an in-memory mock
-    */
-  trait EffectMap[F[_], K, V] {
-    def getAll: F[List[(K, V)]]
-    def getAllValues: F[List[V]]
-    def get(key: K): F[Option[V]]
-    def add(key: K, value: V): F[K]
-    def remove(key: K): F[Unit]
-  }
-
-  object EffectMap {
-    def make[F[_]: MonadThrow: Ref.Make, K, V](init: Map[K, V] = Map.empty[K, V]): F[EffectMap[F, K, V]] = {
-      Ref
-        .ofEffect(init.pure[F])
-        .map { state =>
-          new EffectMap[F, K, V] {
-            def getAll: F[List[(K, V)]] = state.get.map(_.toList)
-            def getAllValues: F[List[V]] = getAll.map(_.map(_._2))
-            def get(key: K): F[Option[V]] = state.get.map(_.get(key))
-            def add(key: K, value: V): F[K] = state.update(_ + (key -> value)).as(key)
-            def remove(key: K): F[Unit] = state.update(_.removed(key))
-          }
-        }
-    }
-  }
 }

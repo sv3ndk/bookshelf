@@ -33,6 +33,8 @@ import org.http4s.circe.CirceEntityCodec._
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
+import _root_.cats.data.OptionT
+import _root_.cats.data.EitherT
 
 object CatalogRoutes extends Http4sDsl[IO] {
   import Categories._
@@ -76,7 +78,6 @@ object CatalogRoutes extends Http4sDsl[IO] {
           .flatMap(raw => IO.fromTry(validated(raw.asDomain)))
           .flatMap(authors.create)
           .flatMap(Created(_))
-
     }
   }
 
@@ -107,32 +108,35 @@ object CatalogRoutes extends Http4sDsl[IO] {
 
   case class RawCreateCategory(name: String, description: String) {
     def asDomain: ValidatedNel[ParseFailure, CreateCategory] = (
-      refineVDetailed[CategoryName](name, "name").toValidatedNel,
-      refineVDetailed[CategoryDescription](description, "description").toValidatedNel
+      refineDetailed[CategoryName](name, "name").toValidatedNel,
+      refineDetailed[CategoryDescription](description, "description").toValidatedNel
     ).mapN(CreateCategory)
   }
 
   case class RawCreateAuthor(firstName: String, lastName: String) {
     def asDomain: ValidatedNel[ParseFailure, CreateAuthor] = (
-      refineVDetailed[Authors.FirstName](firstName, "firstName").toValidatedNel,
-      refineVDetailed[Authors.LastName](lastName, "lastName").toValidatedNel
+      refineDetailed[Authors.FirstName](firstName, "firstName").toValidatedNel,
+      refineDetailed[Authors.LastName](lastName, "lastName").toValidatedNel
     ).mapN(CreateAuthor)
   }
 
   case class RawCreateBook(
       title: String,
       authorId: String,
-      publicationYear: Int,
+      publicationYear: Option[Int],
       categoryIds: List[String],
-      summary: String
+      summary: Option[String]
   ) {
-    def asDomain: ValidatedNel[ParseFailure, CreateBook] = (
-      refineVDetailed[Books.BookTitle](title, "title").toValidatedNel,
-      refineVDetailed[Authors.AuthorId](authorId, "authorId").toValidatedNel,
-      refineVDetailed[Books.BookPublicationYear](publicationYear, "publicationYear").toValidatedNel,
-      categoryIds.traverse(catId => refineVDetailed[Categories.CategoryId](catId, "categoryIds").toValidatedNel),
-      Validated.validNel[ParseFailure, String](summary)
-    ).mapN(CreateBook)
+    def asDomain: ValidatedNel[ParseFailure, CreateBook] = {
+      (
+        refineDetailed[Books.BookTitle](title, "title").toValidatedNel,
+        refineDetailed[Authors.AuthorId](authorId, "authorId").toValidatedNel,
+        refineOptDetailed[Books.BookPublicationYear](publicationYear, "publicationYear").toValidatedNel,
+        categoryIds.traverse(catId => refineDetailed[Categories.CategoryId](catId, "categoryIds").toValidatedNel),
+        Validated.validNel[ParseFailure, Option[String]](summary)
+      ).mapN(CreateBook)
+
+    }
   }
 
 }
