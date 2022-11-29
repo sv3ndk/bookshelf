@@ -3,10 +3,10 @@ package bookshelf.clientdemo
 import bookshelf.catalog.Authors._
 import bookshelf.catalog.Books
 import bookshelf.catalog.Books._
+import bookshelf.utils.logging._
 import bookshelf.catalog.Categories._
 import cats.effect.ExitCode
 import cats.effect.IO
-import cats.effect.IOApp
 import cats.effect.kernel.Resource
 import eu.timepit.refined._
 import io.circe.generic.auto._
@@ -22,6 +22,7 @@ import org.http4s.client.dsl.io._
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.headers._
 import org.http4s.implicits._
+import org.log4s._
 
 trait BookshelfClient {
   def getCategory(name: CategoryName): IO[Category]
@@ -35,6 +36,7 @@ trait BookshelfClient {
 }
 
 object BookshelfClient {
+  implicit private val logger = getLogger
 
   def build(baseUri: Uri): Resource[IO, BookshelfClient] =
     EmberClientBuilder
@@ -50,30 +52,34 @@ object BookshelfClient {
       Method.POST(body, uri, Accept(MediaType.application.json))
 
     def getCategory(name: CategoryName) =
-      IO.println(s"fetching category $name") >>
-        httpClient.expect[Category](GET(catalogUri / "category" +? ("name", name.value)))
+      IO(logger.info(s"fetching category $name")) >>
+        httpClient.expect[Category](GET(catalogUri / "category" +? ("name", name.value))).debug
     val getAllCategories =
-      IO.println(s"fetching all categories") >> httpClient.expect[List[Category]](GET(catalogUri / "category" / "all"))
+      IO(logger.info(s"fetching all categories")) >>
+        httpClient.expect[List[Category]](GET(catalogUri / "category" / "all")).debug
 
     def createCategory(createCategory: CreateCategory) =
-      httpClient.expect[CategoryId](POST(createCategory, catalogUri / "category"))
+      IO(logger.info(s"creating  category $createCategory")) >>
+        httpClient.expect[CategoryId](POST(createCategory, catalogUri / "category")).debug
 
     def getAuthor(id: AuthorId) =
-      IO.println(s"fetching author $id") >>
-        httpClient.expect[Author](GET(catalogUri / "author" +? ("id", id.value)))
+      IO(logger.info(s"fetching author $id")) >>
+        httpClient.expect[Author](GET(catalogUri / "author" +? ("id", id.value))).debug
+
     val getAllAuthors =
-      IO.println(s"fetching all authors") >>
-        httpClient.expect[List[Author]](GET(catalogUri / "author" / "all"))
+      IO(logger.info(s"fetching all authors")) >>
+        httpClient.expect[List[Author]](GET(catalogUri / "author" / "all")).debug
 
     def createAuthor(createAuthor: CreateAuthor) =
-      httpClient.expect[AuthorId](POST(createAuthor, catalogUri / "author"))
+      IO(logger.info(s"creating author $createAuthor")) >>
+        httpClient.expect[AuthorId](POST(createAuthor, catalogUri / "author")).debug
 
     def getBook(id: BookId) =
-      IO.println(s"fetching book $id") >>
-        httpClient.expect[Book](GET(catalogUri / "book" +? ("id", id.value)))
+      IO(logger.info(s"fetching book $id")) >>
+        httpClient.expect[Book](GET(catalogUri / "book" +? ("id", id.value))).debug
 
     def createBook(createBook: CreateBook) =
-      httpClient.expect[BookId](POST(createBook, catalogUri / "book"))
-
+      IO(logger.info(s"creating book $createBook")) >>
+        httpClient.expect[BookId](POST(createBook, catalogUri / "book")).debug
   }
 }

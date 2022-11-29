@@ -6,6 +6,7 @@ val RefinedVersion = "0.10.1"
 val DoobieVersion = "1.0.0-RC1"
 val HikariCPVersion = "5.0.1"
 val LogbackVersion = "1.4.5"
+val Log4SVersion = "1.10.0"
 
 val MunitVersion = "0.7.29"
 val ScalacheckVersion = "1.0.4"
@@ -22,6 +23,7 @@ lazy val root = (project in file("."))
     IntegrationTest / fork := true,
     libraryDependencies ++= Seq(
       "ch.qos.logback" % "logback-classic" % LogbackVersion % Runtime,
+      "org.log4s" %% "log4s" % Log4SVersion,
       "org.http4s" %% "http4s-ember-server" % Http4sVersion,
       "org.http4s" %% "http4s-ember-client" % Http4sVersion,
       "org.http4s" %% "http4s-circe" % Http4sVersion,

@@ -2,10 +2,7 @@ package bookshelf.catalog
 
 import bookshelf.utils.validation.CommonErrorMessages._
 import bookshelf.utils.validation._
-import cats.Applicative
-import cats.FlatMap
-import cats.MonadError
-import cats.MonadThrow
+import bookshelf.utils.logging._
 import cats.data.NonEmptyList
 import cats.data.Validated
 import cats.data.Validated.Invalid
@@ -14,27 +11,18 @@ import cats.data.ValidatedNel
 import cats.effect.Concurrent
 import cats.effect.IO
 import cats.syntax.all._
-import doobie._
-import doobie.implicits._
-import doobie.util.transactor
-import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.api.Validate
 import io.circe.generic.auto._
 import io.circe.refined._
 import org.http4s.HttpRoutes
 import org.http4s.HttpVersion
-import org.http4s.InvalidMessageBodyFailure
-import org.http4s.MalformedMessageBodyFailure
 import org.http4s.ParseFailure
-import org.http4s.QueryParamDecoder
-import org.http4s.QueryParameterValue
 import org.http4s.circe.CirceEntityCodec._
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
-import _root_.cats.data.OptionT
-import _root_.cats.data.EitherT
+import eu.timepit.refined.string.Uuid
+import eu.timepit.refined.api.Refined
+import org.log4s._
 
 object CatalogRoutes extends Http4sDsl[IO] {
   import Categories._
@@ -42,10 +30,10 @@ object CatalogRoutes extends Http4sDsl[IO] {
   import Books._
 
   def categoryRoutes(categories: Categories): HttpRoutes[IO] = {
-    object NameQueryParamMatcher extends NamedQueryParamDecoderMatcher[CategoryName]("name")
+    val nameQueryParamMatcher = namedQueryParamDecoderMatcher[String, CategoryNameConstraint]("name")
 
     HttpRoutes.of {
-      case GET -> Root :? NameQueryParamMatcher(catParam) =>
+      case GET -> Root :? nameQueryParamMatcher(catParam) =>
         IO.fromTry(validated(catParam))
           .flatMap(category => categories.get(category))
           .flatMap(Ok(_))
@@ -62,10 +50,10 @@ object CatalogRoutes extends Http4sDsl[IO] {
   }
 
   def authorRoutes(authors: Authors): HttpRoutes[IO] = {
-    object IdQueryParamMatcher extends NamedQueryParamDecoderMatcher[AuthorId]("id")
+    val idQueryParamMatcher = namedQueryParamDecoderMatcher[String, Uuid]("id")
 
     HttpRoutes.of {
-      case GET -> Root :? IdQueryParamMatcher(idParam) =>
+      case GET -> Root :? idQueryParamMatcher(idParam) =>
         IO.fromTry(validated(idParam))
           .flatMap(id => authors.get(id))
           .flatMap(Ok(_))
@@ -82,10 +70,10 @@ object CatalogRoutes extends Http4sDsl[IO] {
   }
 
   def bookRoutes(books: Books): HttpRoutes[IO] = {
-    object IdQueryParamMatcher extends NamedQueryParamDecoderMatcher[Books.BookId]("id")
+    val idQueryParamMatcher = namedQueryParamDecoderMatcher[String, Uuid]("id")
 
     HttpRoutes.of {
-      case GET -> Root :? IdQueryParamMatcher(idParam) =>
+      case GET -> Root :? idQueryParamMatcher(idParam) =>
         IO.fromTry(validated(idParam))
           .flatMap(id => books.get(id))
           .flatMap(Ok(_))

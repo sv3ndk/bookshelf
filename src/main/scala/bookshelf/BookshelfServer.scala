@@ -5,7 +5,6 @@ import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
 import bookshelf.catalog._
 import bookshelf.utils.validation._
-import cats.effect.Async
 import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.IOApp
@@ -15,23 +14,19 @@ import com.comcast.ip4s._
 import doobie.hikari._
 import doobie.util.ExecutionContexts
 import doobie.util.transactor.Transactor
-import fs2.Stream
 import org.http4s.EntityEncoder
 import org.http4s.HttpApp
-import org.http4s.HttpVersion
 import org.http4s.InvalidBodyException
 import org.http4s.InvalidMessageBodyFailure
-import org.http4s.MessageFailure
-import org.http4s.ParseFailure
 import org.http4s.Response
 import org.http4s.Status
-import org.http4s.client.UnexpectedStatus
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.middleware.ErrorHandling
 import org.http4s.server.middleware.Logger
+import org.log4s._
 
 case class AppConfig(
     rdbmsHost: String,
@@ -90,10 +85,14 @@ object BookshelfServer {
 
 object BookshelfServerApp extends IOApp {
 
+  private val logger = getLogger
+
   val localDockerConfig = AppConfig(
     rdbmsHost = "localhost",
     rdbmsPort = 5432
   )
-  def run(args: List[String]) =
+  def run(args: List[String]) = {
+    logger.info(s"starting application with config $localDockerConfig")
     BookshelfServer.server(localDockerConfig).as(ExitCode.Success)
+  }
 }

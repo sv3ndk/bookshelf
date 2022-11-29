@@ -1,6 +1,6 @@
 # Bookshelf
 
-Toy application to handle books and bookshelves, as an excuse to play with Typelevel Cats eco-system.
+Toy application to handle books and bookshelves, as an excuse to play with the Cats eco-system.
 
 # Use cases:
 
@@ -28,6 +28,34 @@ Toy application to handle books and bookshelves, as an excuse to play with Typel
   * create tags and assign them to books: as opposed to category, a tag exists only for one given user
   * flag comments as problematic
   * add ratings to books
+
+# Design:
+
+## code decisions
+
+* most operations are super simple CRUD stuff => 3 simple layers:
+    *  `Http`: responsible for web routing, (de)serialization, authentication...
+    * `Services`: business scenario (when they exist), definition of dB transaction boundaries, creation of entity id, retries and fall-back strategy
+    * `Persistence`: interraction with DB
+* In case of invalid input, the `Http` layers attempts to provide helpful feed-back regarding what's wrong, though without echoing the input
+* I'm not using tagless final but rather committing to the concrete IO effect.  
+* I followed the mantra "package together things that change together", s.t. things are grouped in folder per domain (`catalog`, `session`,..) 
+  instead of grouping them by technical concern (e.g. `model`, `http`, `persistence`,...)
+* Integration tests rely on docker-compose env, strated automatically
+
+## domains
+  * `catalog`: handling of the book catalog available on the site, including search
+  * `shelf`: allow users to manage their bookshelves (TODO)
+  * `profile`: login, logout, user creation (TODO)
+  * `social`: comments, rating, moderation (TODO)
+
+## Tech stack:
+
+* core: cats, cats-effect, log4s
+* rest layer: http4s
+* data validation: refined
+* persistence: doobie, postgreSQL
+* tests: munit, scalacheck, testcontainers-scala, docker
 
 
 # How to run
@@ -63,33 +91,6 @@ runMain bookshelf.clientdemo.ClientDemo
 ```
 
 
-# Design:
-
-
-## code structure
-
-* most operations are super simple CRUD stuff => 3 simple layers:
-    *  `Http`: responsible for web routing, (de)serialization, authentication...
-    * `Services`: business scenario (when they exist), definition of dB transaction boundaries, creation of entity id, retries and fall-back strategy
-    * `Persistence`: interraction with DB
-* I'm not using tagless final but rather committing to the concrete IO effect
-* I followed the mantra "package together things that change together", s.t. things are grouped in folder per domain (`catalog`, `session`,..) 
-  instead of grouping them by technical concern (e.g. `model`, `http`, `persistence`,...)
-
-## domains
-  * `catalog`: handling of the book catalog available on the site, including search
-  * `shelf`: allow users to manage their bookshelves
-  * `profile`: login, logout, user creation
-  * `social`: comments, rating, moderation
-
-## Tech stack:
-
-* core: cats and cats-effect
-* rest layer: http4s
-* data validation: refined
-* persistence: doobie, postgreSQL
-* tests: munit, scalacheck, testcontainers-scala
-
 # Lessons learnt:
 
 * this combinasion of imports conjures up automatic json decoding/encoding from/to case class while using refined types
@@ -101,15 +102,17 @@ import io.circe.refined._
 import org.http4s.circe.CirceEntityCodec._
 ```
 
-* error handling in http4s can either be specifically in each route, or else for repetitive stuff we can let the `MessageFailure` "bubbleUp" and use a middleware to transform it. I crafted a middleware that returns quite a verbose message, it's probably not the most secure option.
+* error handling in http4s can either be specifically done in each route, or else for repetitive stuff we can let the `MessageFailure` "bubble up" and use a middleware to transform it. 
 
-* Doobie check() is quite good at detecting compatibility of the query with the scala types
+* Doobie `check()` is quite good at detecting compatibility of the SQL queries with the scala types
 
-* I don't like implicits, they fail in obscure ways when the relevant imports are missing, especially when a chain of them is necessary (e.g. a functio requireing an implicit entity decorer, itself requiring a json decoder, itself requiring a refined type decoder...), as a user I need to understand lot's of implementation details to fix my bugs when I used them incorrectly.
+* stack traces in app written with Cats are pretty much unusable since they often show mostly plumbing technical info as opposed to pointing to the source of the issue. That's because my code is not what run directy in prod: my code generates a program that runs in prod, and the stack trace is expressed in terms of _that_ program, not my original code.
 
-* stack traces in app written with Cats are pretty much unusable since they often show mostly pluming technical info as opposed to pointing to the source of the issue 
+* I don't like over-user of implicits, they fail in obscure ways when the relevant imports are missing, especially when a chain of them is necessary (e.g. a function requiring an implicit entity decorer, itself requiring a json decoder, itself requiring a refined type decoder...), as a user I need to understand lot's of implementation details to fix my bugs when I used them incorrectly.
 
 * My current feeling towards tagless final is that it's probably overly-generalization, adding an additional layer of abstraction for little added value. OTOH without it we end up with all functions returning `IO[Stuff]` which is a bit the effect equivalent of returning `Object` everywhere, it's super broad. Ideally, we should seek opportunities to express business logic as simple functions outside of any effect, and delegate to it from and effectful layer using `IO.fromEither(...)` or so.
+
+* Call me impure all you want, though I much prefer using log4s to log4cats: do we _really_ need to capture logs as effect? Also, log4cats prevents to log from a pure function, since we need to express the log in an effect, whereas I currently feel like we should express as much logic as possible in pure functions, outside of effect. 
 
 Further notes:
 
@@ -122,8 +125,7 @@ Further notes:
 
 TODO:
 * add persistence layer:
-  * finish integration tests: add more scenarios 
-  * improve error handling: empty list in json input, non-existing author id when creating a book,...
+  * with integration tests: improve error handling: empty list in json input, non-existing author id when creating a book,... 
   * add ability to update and delete
   * add pagination to book and author queries
 

@@ -3,11 +3,11 @@ package bookshelf.catalog
 import bookshelf.catalog.Books._
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
-import bookshelf.utils.core.makeId
 import bookshelf.utils.TestUtils
+import bookshelf.utils.core.makeId
+import cats.data.Validated
 import cats.effect.IO
 import cats.instances.finiteDuration
-import cats.data.Validated
 import cats.syntax.all._
 import eu.timepit.refined._
 import eu.timepit.refined.api.RefType
@@ -31,8 +31,8 @@ import org.http4s.client.dsl.io._
 import org.http4s.implicits._
 import org.http4s.server.middleware.ErrorHandling
 import org.scalacheck.Gen
-import org.scalacheck.Prop._
 import org.scalacheck.Prop
+import org.scalacheck.Prop._
 import org.scalacheck.effect.PropF
 
 class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSuite {
@@ -65,13 +65,13 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
     assertFailedResponse(
       testedBooksRoutes().run(GET(uri"/".withQueryParam("id", "someinvaliduuid"))),
       Status.BadRequest,
-      "Invalid query param 'id': is not a valid UUID"
+      "Invalid query param: id is not a valid UUID"
     )
   }
 
   test("posting well formed json book with all empty fields should yield all errors, without echoing the input") {
     assertFailedResponse(
-      testedBooksRoutes().run(POST(CatalogRoutes.RawCreateBook("", "", 0, List("", ""), ""), uri"/")),
+      testedBooksRoutes().run(POST(CatalogRoutes.RawCreateBook("", "", Some(0), List("", ""), Some("")), uri"/")),
       Status.BadRequest,
       "title should not be empty, authorId is not a valid UUID, publicationYear should be a year in [1800, 2200], categoryIds is not a valid UUID, categoryIds is not a valid UUID"
     )

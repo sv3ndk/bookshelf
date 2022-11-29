@@ -1,15 +1,8 @@
 package bookshelf.catalog
 
 import bookshelf.utils.core.TechnicalError
-import bookshelf.utils.core.makeId
-import bookshelf.utils.validation
 import bookshelf.utils.validation.AsDetailedValidationError
-import cats.MonadThrow
-import cats.effect.Concurrent
 import cats.effect.IO
-import cats.effect.Ref
-import cats.effect.kernel.Resource
-import cats.effect.syntax.async
 import cats.syntax.applicative._
 import cats.syntax.traverse._
 import cats.syntax.flatMap._

@@ -57,18 +57,18 @@ object TestDataGen {
   val rawCreateBookGen: Gen[CatalogRoutes.RawCreateBook] = for {
     title <- genNonEmpytString
     authorId <- genUuid
-    year <- publicationYearGen
+    year <- Gen.option(publicationYearGen)
     ids <- genUuidList
-    summary <- nonEmptyAlphaNumString
-  } yield CatalogRoutes.RawCreateBook(title.value, authorId.value, year.value, ids.map(_.value), summary)
+    summary <- Gen.option(nonEmptyAlphaNumString)
+  } yield CatalogRoutes.RawCreateBook(title.value, authorId.value, year.map(_.value), ids.map(_.value), summary)
 
   val fineBookGen: Gen[Books.Book] = for {
     id <- genUuid
     title <- genNonEmpytString
     author <- fineAuthorGen
-    year <- publicationYearGen
+    year <- Gen.option(publicationYearGen)
     categories <- fineCategoriesGen
-    summary <- nonEmptyAlphaNumString
+    summary <- Gen.option(nonEmptyAlphaNumString)
   } yield Books.Book(id, title, author, year, categories, summary)
 
   val fineBooksGen: Gen[List[Books.Book]] = Gen.nonEmptyListOf(fineBookGen)

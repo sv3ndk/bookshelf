@@ -1,13 +1,13 @@
 package bookshelf.clientdemo
 
+import bookshelf.AppConfig
 import bookshelf.BookshelfServer
 import bookshelf.BookshelfServerApp
-import bookshelf.AppConfig
 import bookshelf.catalog.Authors._
 import bookshelf.catalog.Books
 import bookshelf.catalog.Books._
 import bookshelf.catalog.Categories._
-import bookshelf.utils.debug._
+import bookshelf.utils.logging._
 import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.IOApp
@@ -28,10 +28,13 @@ import org.http4s.client.dsl.io._
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.headers._
 import org.http4s.implicits._
+import org.log4s._
 
 /** Demo of an HTTP client to the bookshelf app (requires the Bookshelf app to already be running)
   */
 object ClientDemo extends IOApp {
+
+  implicit private[this] val logger = getLogger
 
   def run(args: List[String]): IO[ExitCode] = {
     BookshelfClient
@@ -69,11 +72,11 @@ object ClientDemo extends IOApp {
   }
 
   def resetDbTestData(config: AppConfig): IO[Unit] = {
-    IO.println("Populating DB with test data") >>
+    IO(logger.info("Populating DB with test data")) >>
       BookshelfServer
         .localHostTransactor(config)
         .use(xa => (deleteAll.run.transact(xa) >> insertTestData.run.transact(xa)).void) >>
-      IO.println("DB now contains data")
+      IO(logger.info("DB now contains data"))
   }
 
   val deleteAll = sql"""

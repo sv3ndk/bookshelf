@@ -52,11 +52,11 @@ trait DockerComposeIntegrationTests extends TestContainerForAll {
       )
     }
 
-  /** Executes this integration test using the app http client, relying an initialized docker-compose environement,
-    * i.e.:
+  /** Executes this integration test using the app http client, relying an initialized docker-compose environement, with
+    * the following guarantees.
     *   - docker environment is running
-    *   - the provide http client point to app to test
-    *   - a DB is initialized with some test data, and is reset before each test execution
+    *   - the provided http client points to bookshelf app to test
+    *   - a DB is initialized with some test data and is reset before each test execution
     */
   def httpTest(testLabel: String)(testWithClient: BookshelfClient => IO[Unit]) =
     testWithContainer(testLabel) { appConfig =>
