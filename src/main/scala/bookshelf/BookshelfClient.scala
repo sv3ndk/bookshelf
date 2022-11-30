@@ -30,7 +30,6 @@ trait BookshelfClient {
   def getAllCategories: IO[List[Category]]
   def createCategory(createCategory: CreateCategory): IO[CategoryId]
   def getAuthor(id: AuthorId): IO[Author]
-  def getAuthorRaw(id: AuthorId): Resource[IO, Response[IO]]
   def getAllAuthors: IO[List[Author]]
   def createAuthor(createAuthor: CreateAuthor): IO[AuthorId]
   def getBook(id: BookId): IO[Book]
@@ -68,13 +67,7 @@ object BookshelfClient {
 
     def getAuthor(id: AuthorId) =
       IO(logger.info(s"fetching author $id")) >>
-        httpClient
-          .expect[Author](GET(catalogUri / "author" +? ("id", id.value)))
-          .debug
-
-    def getAuthorRaw(id: AuthorId) =
-      // IO(logger.info(s"fetching author $id")) >>
-      httpClient.run(GET(catalogUri / "author" +? ("id", id.value)))
+        httpClient.expect[Author](GET(catalogUri / "author" +? ("id", id.value))).debug
 
     val getAllAuthors =
       IO(logger.info(s"fetching all authors")) >>

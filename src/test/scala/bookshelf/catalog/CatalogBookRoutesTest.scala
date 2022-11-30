@@ -4,6 +4,10 @@ import bookshelf.catalog.Books._
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
 import bookshelf.utils.TestUtils
+import bookshelf.utils.authentication.User
+import bookshelf.utils.TestAuthentication.dummyAuthMiddlewareAllUsersAdmin
+import bookshelf.utils.TestAuthentication.dummyAuthMiddlewareAllUsersWithoutRoles
+
 import bookshelf.utils.core.makeId
 import cats.data.Validated
 import cats.effect.IO
@@ -34,11 +38,16 @@ import org.scalacheck.Gen
 import org.scalacheck.Prop
 import org.scalacheck.Prop._
 import org.scalacheck.effect.PropF
+import org.http4s.server.AuthMiddleware
+import bookshelf.utils.authentication
 
 class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSuite {
 
-  def testedBooksRoutes(stub: BooksStub = new BooksStub()) =
-    ErrorHandling.Recover.messageFailure(CatalogRoutes.bookRoutes(stub).orNotFound)
+  def testedBooksRoutes(
+      stub: BooksStub = new BooksStub(),
+      auth: AuthMiddleware[IO, User] = dummyAuthMiddlewareAllUsersAdmin
+  ) =
+    ErrorHandling.Recover.messageFailure(CatalogRoutes.bookRoutes(auth, stub).orNotFound)
 
   test("getting a pre-existing book category") {
     PropF.forAllF(TestDataGen.fineBooksGen) { testBooks =>
@@ -75,6 +84,17 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
       Status.BadRequest,
       "title should not be empty, authorId is not a valid UUID, publicationYear should be a year in [1800, 2200], categoryIds is not a valid UUID, categoryIds is not a valid UUID"
     )
+  }
+
+  test("creating a book without admin role should be forbidden") {
+    PropF.forAllF(TestDataGen.rawCreateBookGen) { createdBook =>
+      assertFailedResponse(
+        testedBooksRoutes(auth = dummyAuthMiddlewareAllUsersWithoutRoles)
+          .run(POST(createdBook, uri"/")),
+        Status.Forbidden,
+        "\"Only admins can create new books\""
+      )
+    }
   }
 
   class BooksStub(data: List[Books.Book] = List.empty) extends Books {

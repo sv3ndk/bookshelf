@@ -1,9 +1,13 @@
 package bookshelf.catalog
 
 import bookshelf.catalog.CatalogRoutes
+import bookshelf.utils.authentication.User
+
 import bookshelf.catalog.Categories
 import bookshelf.utils.TestUtils
 import bookshelf.utils.core
+import bookshelf.utils.TestAuthentication.dummyAuthMiddlewareAllUsersAdmin
+import bookshelf.utils.TestAuthentication.dummyAuthMiddlewareAllUsersWithoutRoles
 import bookshelf.utils.core.makeId
 import cats.data.Validated.Invalid
 import cats.data.Validated.Valid
@@ -22,24 +26,26 @@ import io.circe.refined._
 import io.circe.syntax._
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
-import munit.ScalaCheckSuite
 import org.http4s.Method._
 import org.http4s.Status.BadRequest
 import org.http4s._
+import org.http4s.server.AuthMiddleware
 import org.http4s.circe.CirceEntityCodec._
 import org.http4s.client.Client
 import org.http4s.client.dsl.io._
 import org.http4s.implicits._
 import org.http4s.server.middleware.ErrorHandling
-import org.scalacheck.Gen
-import org.scalacheck.Prop
 import org.scalacheck.Prop._
 import org.scalacheck.effect.PropF
+import bookshelf.utils.authentication
 
 class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffectSuite {
 
-  def testedCategoryRoutes(stub: CategoriesStub = new CategoriesStub()) =
-    ErrorHandling.Recover.messageFailure(CatalogRoutes.categoryRoutes(stub).orNotFound)
+  def testedCategoryRoutes(
+      stub: CategoriesStub = new CategoriesStub(),
+      auth: AuthMiddleware[IO, User] = dummyAuthMiddlewareAllUsersAdmin
+  ) =
+    ErrorHandling.Recover.messageFailure(CatalogRoutes.categoryRoutes(auth, stub).orNotFound)
 
   test("getting a pre-existing book category") {
     PropF.forAllF(TestDataGen.fineCategoriesGen) { testCategories =>
@@ -109,10 +115,21 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
     )
   }
 
+  test("creating a category without admin role should be forbidden") {
+    PropF.forAllF(TestDataGen.rawCreateCategoryGen) { createCategory =>
+      assertFailedResponse(
+        testedCategoryRoutes(auth = dummyAuthMiddlewareAllUsersWithoutRoles)
+          .run(POST(createCategory, uri"/")),
+        Status.Forbidden,
+        "\"Only admins can create book categories\""
+      )
+    }
+  }
+
   class CategoriesStub(data: List[Categories.Category] = List.empty) extends Categories {
     def get(name: Categories.CategoryName) = IO.pure(data.find(_.name == name))
     def getAll = IO.pure(data)
-    def create(category: Categories.CreateCategory) = IO.pure(CategoriesStub.createdId)
+    def create(category: Categories.CreateCategory) = IO.pure(Right(CategoriesStub.createdId))
   }
 
   object CategoriesStub {

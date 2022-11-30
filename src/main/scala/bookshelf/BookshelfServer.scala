@@ -3,6 +3,7 @@ package bookshelf
 import bookshelf.catalog.Books
 import bookshelf.catalog.CatalogRoutes
 import bookshelf.catalog.Categories
+import bookshelf.utils.authentication.authMiddleware
 import bookshelf.catalog._
 import bookshelf.utils.validation._
 import cats.effect.ExitCode
@@ -54,11 +55,7 @@ object BookshelfServer {
   def bookshelfApp(xa: Transactor[IO]): HttpApp[IO] = {
     val httpApp = Router
       .of(
-        "catalog" -> CatalogRoutes.routes(
-          Categories.make(xa),
-          Authors.make(xa),
-          Books.make(xa)
-        )
+        "catalog" -> CatalogRoutes.routes(authMiddleware, Categories(xa), Authors(xa), Books(xa))
       )
       .orNotFound
 

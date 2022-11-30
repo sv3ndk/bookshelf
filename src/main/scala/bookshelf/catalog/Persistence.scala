@@ -45,7 +45,6 @@ object CategoriesDb extends doobie.refined.Instances {
         select id, name, description 
         from category
         where name = $name
-        limit 1
         """.query[Category]
 
     def create(id: CategoryId, createCategory: CreateCategory) =

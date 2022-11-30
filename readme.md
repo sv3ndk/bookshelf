@@ -39,11 +39,10 @@ Toy application to handle books and bookshelves, as an excuse to play with the C
     * `Persistence`: interraction with DB
 * Error handling:
   * In case of invalid input, the `Http` layers attempts to provide helpful feed-back, without echoing the input
-  * business error are propagated as a `Left` of some error ADT and explicitly handled in the `Http` layer
-  * Technical error should "bubble up" in the `IO` error channel and yield an HTTP 500
-* I'm not using tagless final but rather committing to the concrete IO effect.  
+  * business errors are propagated as a `Left` of some error ADT and explicitly handled in the `Http` layer
+  * Technical errors should "bubble up" in the `IO` error channel and yield an HTTP 500
+* I'm not using tagless final but rather committing to the concrete `IO` effect.  
 * I followed the mantra "package together things that change together", s.t. things are grouped in folder per domain (`catalog`, `session`,..) 
-  instead of grouping them by technical concern (e.g. `model`, `http`, `persistence`,...)
 * Integration tests rely on docker-compose env, strated automatically
 
 ## domains
@@ -104,7 +103,6 @@ import io.circe.refined._
 import org.http4s.circe.CirceEntityCodec._
 ```
 
-
 * Doobie `check()` is quite good at detecting compatibility of the SQL queries with the scala types
 
 * stack traces in app written with Cats are pretty much unusable since they often show mostly plumbing technical info as opposed to pointing to the source of the issue. That's because my code is not what run directy in prod: my code generates a program that runs in prod, and the stack trace is expressed in terms of _that_ program, not my original code.
@@ -118,7 +116,9 @@ import org.http4s.circe.CirceEntityCodec._
 
 TODO: 
 
-* authentication + `profile` domain
+* authentication: add JWT
+  * update http client to add JWT token with some hard-coded key 
+  * update middleware to retrieve user id from JWT => do my integration tests still work? + update demo client
+
 * retry strategy
 * shelf domain + add a Redis persistence
-*

@@ -7,10 +7,7 @@ import cats.data.Validated.Invalid
 import cats.data.Validated.Valid
 import cats.data.ValidatedNel
 import cats.effect.IO
-import cats.syntax.applicative._
-import cats.syntax.applicativeError._
 import cats.syntax.either._
-import cats.syntax.functor._
 import cats.syntax.option._
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -111,27 +108,4 @@ object validation {
         Failure(ParseFailure(mergedSanitized, mergedDetails))
       case Valid(a) => Success(a)
     }
-}
-
-object core {
-
-  import org.log4s._
-  private val logger = getLogger
-
-  class TechnicalError(err: String) extends RuntimeException
-
-  def makeId[A](implicit ev: Refined[String, Uuid] =:= A): A = {
-    val Right(id) = refineV[Uuid](java.util.UUID.randomUUID().toString())
-    id
-  }
-}
-
-object logging {
-
-  import org.log4s._
-
-  implicit class BookshelfIoOps[A](val ioa: IO[A]) extends AnyVal {
-    def debug(implicit logger: Logger): IO[A] = ioa.map(a => { logger.info(a.toString()); a })
-  }
-
 }

@@ -40,10 +40,9 @@ object Categories {
 
   // "ADT" with one single possible busines error in case of category creation
   // (would normally be an enum or sealed trait)
-
   case object CategoryAlreadyExists
 
-  def make(xa: Transactor[IO]) = new Categories {
+  def apply(xa: Transactor[IO]) = new Categories {
     def get(name: CategoryName) = CategoriesDb.get(name).transact(xa)
     def getAll = CategoriesDb.getAll.transact(xa)
     def create(category: CreateCategory) =
@@ -67,7 +66,7 @@ object Authors {
   case class Author(id: AuthorId, firstName: FirstName, lastName: LastName)
   case class CreateAuthor(firstName: FirstName, lastName: LastName)
 
-  def make(xa: Transactor[IO]) = new Authors {
+  def apply(xa: Transactor[IO]) = new Authors {
     def get(id: AuthorId): IO[Option[Authors.Author]] = AuthorsDb.get(id).transact(xa)
     def getAll: IO[List[Author]] = AuthorsDb.getAll.transact(xa)
     def create(createAuthor: Authors.CreateAuthor) =
@@ -105,7 +104,7 @@ object Books {
       summary: Option[String]
   )
 
-  def make(xa: Transactor[IO]) = new Books {
+  def apply(xa: Transactor[IO]) = new Books {
     def get(id: BookId): IO[Option[Book]] = BooksDb.get(id).transact(xa)
     def create(createBook: Books.CreateBook) =
       IO(makeId[BookId])

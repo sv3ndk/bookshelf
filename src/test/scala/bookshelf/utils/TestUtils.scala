@@ -1,11 +1,17 @@
 package bookshelf.utils
 
+import bookshelf.utils.authentication.User
 import cats.effect.IO
 import munit.Assertions
 import munit.CatsEffectAssertions
 import org.http4s.EntityDecoder
 import org.http4s.Response
 import org.http4s.Status
+import cats.data.Kleisli
+import cats.data.OptionT
+import org.http4s.server.AuthMiddleware
+import org.http4s
+import eu.timepit.refined._
 
 trait TestUtils {
 
@@ -34,5 +40,24 @@ trait TestUtils {
   def assertFailedResponse[A](tested: Response[IO], expectedStatus: Status, expectedBody: String): IO[Unit] =
     IO.pure(tested.status).assertEquals(expectedStatus) *>
       assertIO(bodyAsText(tested.bodyText), expectedBody)
+
+}
+
+object TestAuthentication {
+
+  val testUserWithoutRoles = User(refineMV("svend"), List())
+  val testAdminWithoutRoles = User(refineMV("svend"), List(authentication.Admin))
+
+  val dummyAuthMiddlewareAllUsersWithoutRoles = {
+    val auth: Kleisli[OptionT[IO, *], http4s.Request[IO], User] =
+      Kleisli(request => OptionT.some(testUserWithoutRoles))
+    AuthMiddleware(auth)
+  }
+
+  val dummyAuthMiddlewareAllUsersAdmin = {
+    val auth: Kleisli[OptionT[IO, *], http4s.Request[IO], User] =
+      Kleisli(request => OptionT.some(testAdminWithoutRoles))
+    AuthMiddleware(auth)
+  }
 
 }

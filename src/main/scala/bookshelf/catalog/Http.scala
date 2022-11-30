@@ -2,6 +2,7 @@ package bookshelf.catalog
 
 import bookshelf.utils.validation.CommonErrorMessages._
 import bookshelf.utils.validation._
+import bookshelf.utils.authentication.User
 import cats.data.Validated
 import cats.data.Validated.Invalid
 import cats.data.Validated.Valid
@@ -20,16 +21,19 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 import org.log4s._
 import org.http4s.Status
+import org.http4s.AuthedRoutes
+import bookshelf.utils.authentication
+import org.http4s.server.AuthMiddleware
 
 object CatalogRoutes extends Http4sDsl[IO] {
   import Categories._
   import Authors._
   import Books._
 
-  def categoryRoutes(categories: Categories): HttpRoutes[IO] = {
+  def categoryRoutes(auth: AuthMiddleware[IO, User], categories: Categories): HttpRoutes[IO] = {
     val nameQueryParamMatcher = namedQueryParamDecoderMatcher[String, CategoryNameConstraint]("name")
 
-    HttpRoutes.of {
+    val publicRoutes: HttpRoutes[IO] = HttpRoutes.of {
       case GET -> Root :? nameQueryParamMatcher(catParam) =>
         IO.fromTry(validated(catParam))
           .flatMap(category => categories.get(category))
@@ -39,23 +43,30 @@ object CatalogRoutes extends Http4sDsl[IO] {
           }
 
       case GET -> Root / "all" => categories.getAll.flatMap(Ok(_))
-
-      case req @ POST -> Root =>
-        req
-          .as[RawCreateCategory]
-          .flatMap(raw => IO.fromTry(validated(raw.asDomain)))
-          .flatMap(categories.create)
-          .flatMap {
-            case Left(CategoryAlreadyExists) => BadRequest("Category already exists")
-            case Right(id)                   => Created(id)
-          }
     }
+
+    val authRoutes: AuthedRoutes[User, IO] = AuthedRoutes.of { //
+      case authedReq @ POST -> Root as user =>
+        if (!user.isAdmin)
+          Forbidden("Only admins can create book categories")
+        else
+          authedReq.req
+            .as[RawCreateCategory]
+            .flatMap(raw => IO.fromTry(validated(raw.asDomain)))
+            .flatMap(categories.create)
+            .flatMap {
+              case Left(CategoryAlreadyExists) => BadRequest("Category already exists")
+              case Right(id)                   => Created(id)
+            }
+    }
+
+    publicRoutes <+> auth(authRoutes)
   }
 
-  def authorRoutes(authors: Authors): HttpRoutes[IO] = {
+  def authorRoutes(auth: AuthMiddleware[IO, User], authors: Authors): HttpRoutes[IO] = {
     val idQueryParamMatcher = namedQueryParamDecoderMatcher[String, Uuid]("id")
 
-    HttpRoutes.of {
+    val publicRoutes: HttpRoutes[IO] = HttpRoutes.of {
       case GET -> Root :? idQueryParamMatcher(idParam) =>
         IO.fromTry(validated(idParam))
           .flatMap(id => authors.get(id))
@@ -65,20 +76,26 @@ object CatalogRoutes extends Http4sDsl[IO] {
           }
 
       case GET -> Root / "all" => authors.getAll.flatMap(Ok(_))
+    }
 
-      case req @ POST -> Root =>
-        req
+    val authRoutes: AuthedRoutes[User, IO] = AuthedRoutes.of { //
+      case authedReq @ POST -> Root as user =>
+        if (!user.isAdmin)
+          Forbidden("Only admins can create new authors")
+        authedReq.req
           .as[RawCreateAuthor]
           .flatMap(raw => IO.fromTry(validated(raw.asDomain)))
           .flatMap(authors.create)
           .flatMap(Created(_))
     }
+
+    publicRoutes <+> auth(authRoutes)
   }
 
-  def bookRoutes(books: Books): HttpRoutes[IO] = {
+  def bookRoutes(auth: AuthMiddleware[IO, User], books: Books): HttpRoutes[IO] = {
     val idQueryParamMatcher = namedQueryParamDecoderMatcher[String, Uuid]("id")
 
-    HttpRoutes.of {
+    val publicRoutes: HttpRoutes[IO] = HttpRoutes.of { //
       case GET -> Root :? idQueryParamMatcher(idParam) =>
         IO.fromTry(validated(idParam))
           .flatMap(id => books.get(id))
@@ -86,21 +103,28 @@ object CatalogRoutes extends Http4sDsl[IO] {
             case Some(book) => Ok(book)
             case None       => NotFound("unknown book id")
           }
-
-      case req @ POST -> Root =>
-        req
-          .as[RawCreateBook]
-          .flatMap(raw => IO.fromTry(validated(raw.asDomain)))
-          .flatMap(books.create)
-          .flatMap(Created(_))
     }
+
+    val authRoutes: AuthedRoutes[User, IO] = AuthedRoutes.of { //
+      case authedReq @ POST -> Root as user =>
+        if (!user.isAdmin)
+          Forbidden("Only admins can create new books")
+        else
+          authedReq.req
+            .as[RawCreateBook]
+            .flatMap(raw => IO.fromTry(validated(raw.asDomain)))
+            .flatMap(books.create)
+            .flatMap(Created(_))
+    }
+
+    publicRoutes <+> auth(authRoutes)
   }
 
-  def routes(categories: Categories, authors: Authors, books: Books): HttpRoutes[IO] =
+  def routes(auth: AuthMiddleware[IO, User], categories: Categories, authors: Authors, books: Books): HttpRoutes[IO] =
     Router(
-      "category" -> categoryRoutes(categories),
-      "author" -> authorRoutes(authors),
-      "book" -> bookRoutes(books)
+      "category" -> categoryRoutes(auth, categories),
+      "author" -> authorRoutes(auth, authors),
+      "book" -> bookRoutes(auth, books)
     )
 
   case class RawCreateCategory(name: String, description: String) {
