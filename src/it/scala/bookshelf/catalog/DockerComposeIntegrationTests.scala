@@ -58,14 +58,23 @@ trait DockerComposeIntegrationTests extends TestContainerForAll {
     *   - the provided http client points to bookshelf app to test
     *   - a DB is initialized with some test data and is reset before each test execution
     */
-  def httpTest(testLabel: String)(testWithClient: BookshelfClient => IO[Unit]) =
+  def rawHttpTest(testLabel: String)(testWithClient: Client[IO] => IO[Unit]) =
     testWithContainer(testLabel) { appConfig =>
       ClientDemo.resetDbTestData(appConfig) >>
         BookshelfServer
           .localBookshelfApp(appConfig)
-          .map(app => BookshelfClient(Client.fromHttpApp(app)))
+          .map(app => Client.fromHttpApp(app))
           .use(testWithClient)
     }
+
+  /** Executes this integration test using the app http client, relying an initialized docker-compose environement, with
+    * the following guarantees.
+    *   - docker environment is running
+    *   - the provided http client points to bookshelf app to test
+    *   - a DB is initialized with some test data and is reset before each test execution
+    */
+  def httpTest(testLabel: String)(testWithClient: BookshelfClient => IO[Unit]) =
+    rawHttpTest(testLabel) { appClient => testWithClient(BookshelfClient(appClient)) }
 
   /** Checks this Doobie query or update against a live connection to the Postgres running env.
     *

@@ -62,9 +62,10 @@ object BookshelfServer {
       )
       .orNotFound
 
-    // middleware
-    val finalHttpApp = Logger.httpApp(true, true)(httpApp)
-    finalHttpApp
+    // middlewares
+    ErrorHandling.Recover.total(
+      Logger.httpApp(true, true)(httpApp)
+    )
   }
 
   def localBookshelfApp(config: AppConfig): Resource[IO, HttpApp[IO]] =
@@ -77,7 +78,7 @@ object BookshelfServer {
           .default[IO]
           .withHost(ipv4"0.0.0.0")
           .withPort(port"8080")
-          .withHttpApp(ErrorHandling.Recover.messageFailure(app))
+          .withHttpApp(app)
           .build
       )
       .use(_ => IO.never[Nothing])

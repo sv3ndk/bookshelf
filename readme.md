@@ -34,10 +34,13 @@ Toy application to handle books and bookshelves, as an excuse to play with the C
 ## code decisions
 
 * most operations are super simple CRUD stuff => 3 simple layers:
-    *  `Http`: responsible for web routing, (de)serialization, authentication...
+    *  `Http`: responsible for web routing, (de)serialization...
     * `Services`: business scenario (when they exist), definition of dB transaction boundaries, creation of entity id, retries and fall-back strategy
     * `Persistence`: interraction with DB
-* In case of invalid input, the `Http` layers attempts to provide helpful feed-back regarding what's wrong, though without echoing the input
+* Error handling:
+  * In case of invalid input, the `Http` layers attempts to provide helpful feed-back, without echoing the input
+  * business error are propagated as a `Left` of some error ADT and explicitly handled in the `Http` layer
+  * Technical error should "bubble up" in the `IO` error channel and yield an HTTP 500
 * I'm not using tagless final but rather committing to the concrete IO effect.  
 * I followed the mantra "package together things that change together", s.t. things are grouped in folder per domain (`catalog`, `session`,..) 
   instead of grouping them by technical concern (e.g. `model`, `http`, `persistence`,...)
@@ -52,11 +55,10 @@ Toy application to handle books and bookshelves, as an excuse to play with the C
 ## Tech stack:
 
 * core: cats, cats-effect, log4s
-* rest layer: http4s
+* web layer: http4s, circe
 * data validation: refined
 * persistence: doobie, postgreSQL
 * tests: munit, scalacheck, testcontainers-scala, docker
-
 
 # How to run
 
@@ -102,7 +104,6 @@ import io.circe.refined._
 import org.http4s.circe.CirceEntityCodec._
 ```
 
-* error handling in http4s can either be specifically done in each route, or else for repetitive stuff we can let the `MessageFailure` "bubble up" and use a middleware to transform it. 
 
 * Doobie `check()` is quite good at detecting compatibility of the SQL queries with the scala types
 
@@ -112,26 +113,12 @@ import org.http4s.circe.CirceEntityCodec._
 
 * My current feeling towards tagless final is that it's probably overly-generalization, adding an additional layer of abstraction for little added value. OTOH without it we end up with all functions returning `IO[Stuff]` which is a bit the effect equivalent of returning `Object` everywhere, it's super broad. Ideally, we should seek opportunities to express business logic as simple functions outside of any effect, and delegate to it from and effectful layer using `IO.fromEither(...)` or so.
 
-* Call me impure all you want, though I much prefer using log4s to log4cats: do we _really_ need to capture logs as effect? Also, log4cats prevents to log from a pure function, since we need to express the log in an effect, whereas I currently feel like we should express as much logic as possible in pure functions, outside of effect. 
-
-Further notes:
-
-* 4 downsides to my approach for custom error messages: 
-    * it's based on implicits
-    * I'm returning 400 BadRequest for any error
-    * it's prone to overlap: once an error message is associated to a constraint for one meaning (say, a publication year should be > 1800), we cannot define another one error for the same constrain in another context (say, a page count that shoudl also be > 1800 for some reason)
-    * it doesn't address semantic meaning: 2 types that are equivalent at type level with different semantics (say AuthorId and BookId both being `String Refined Uuid`) can still be passed one instead of the other
+* Call me impure all you want, though I much prefer using log4s to log4cats: do we _really_ need to capture logs as effect? Also, log4cats prevents to log from pure functions, since we need to express logging in an effect, which is at odds with my current feeling that we should express as much logic as possible in pure functions, outside of effect. 
 
 
-TODO:
-* add persistence layer:
-  * with integration tests: improve error handling: empty list in json input, non-existing author id when creating a book,... 
-  * add ability to update and delete
-  * add pagination to book and author queries
+TODO: 
 
-
-* logging
+* authentication + `profile` domain
 * retry strategy
-* authentication + profile domain
 * shelf domain + add a Redis persistence
-* 
+*

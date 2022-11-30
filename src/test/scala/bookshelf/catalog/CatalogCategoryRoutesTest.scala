@@ -116,7 +116,7 @@ class CategoryRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEf
   }
 
   object CategoriesStub {
-    val createdId = makeId[Categories.CategoryId].toOption.get
+    val createdId = makeId[Categories.CategoryId]
   }
 
 }

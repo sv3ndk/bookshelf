@@ -83,7 +83,7 @@ class BookRouteSpec extends CatsEffectSuite with TestUtils with ScalaCheckEffect
   }
 
   object BooksStub {
-    val createdId = makeId[Books.BookId].toOption.get
+    val createdId = makeId[Books.BookId]
   }
 
 }

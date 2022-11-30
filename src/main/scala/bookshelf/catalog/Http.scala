@@ -2,27 +2,24 @@ package bookshelf.catalog
 
 import bookshelf.utils.validation.CommonErrorMessages._
 import bookshelf.utils.validation._
-import bookshelf.utils.logging._
-import cats.data.NonEmptyList
 import cats.data.Validated
 import cats.data.Validated.Invalid
 import cats.data.Validated.Valid
 import cats.data.ValidatedNel
-import cats.effect.Concurrent
 import cats.effect.IO
 import cats.syntax.all._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.string.Uuid
 import io.circe.generic.auto._
 import io.circe.refined._
 import org.http4s.HttpRoutes
-import org.http4s.HttpVersion
 import org.http4s.ParseFailure
 import org.http4s.circe.CirceEntityCodec._
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
-import eu.timepit.refined.string.Uuid
-import eu.timepit.refined.api.Refined
 import org.log4s._
+import org.http4s.Status
 
 object CatalogRoutes extends Http4sDsl[IO] {
   import Categories._
@@ -36,7 +33,10 @@ object CatalogRoutes extends Http4sDsl[IO] {
       case GET -> Root :? nameQueryParamMatcher(catParam) =>
         IO.fromTry(validated(catParam))
           .flatMap(category => categories.get(category))
-          .flatMap(Ok(_))
+          .flatMap {
+            case Some(category) => Ok(category)
+            case None           => NotFound("unknown category name")
+          }
 
       case GET -> Root / "all" => categories.getAll.flatMap(Ok(_))
 
@@ -45,7 +45,10 @@ object CatalogRoutes extends Http4sDsl[IO] {
           .as[RawCreateCategory]
           .flatMap(raw => IO.fromTry(validated(raw.asDomain)))
           .flatMap(categories.create)
-          .flatMap(Created(_))
+          .flatMap {
+            case Left(CategoryAlreadyExists) => BadRequest("Category already exists")
+            case Right(id)                   => Created(id)
+          }
     }
   }
 
@@ -56,7 +59,10 @@ object CatalogRoutes extends Http4sDsl[IO] {
       case GET -> Root :? idQueryParamMatcher(idParam) =>
         IO.fromTry(validated(idParam))
           .flatMap(id => authors.get(id))
-          .flatMap(Ok(_))
+          .flatMap {
+            case Some(author) => Ok(author)
+            case None         => NotFound("unknown author id")
+          }
 
       case GET -> Root / "all" => authors.getAll.flatMap(Ok(_))
 
@@ -76,7 +82,10 @@ object CatalogRoutes extends Http4sDsl[IO] {
       case GET -> Root :? idQueryParamMatcher(idParam) =>
         IO.fromTry(validated(idParam))
           .flatMap(id => books.get(id))
-          .flatMap(Ok(_))
+          .flatMap {
+            case Some(book) => Ok(book)
+            case None       => NotFound("unknown book id")
+          }
 
       case req @ POST -> Root =>
         req

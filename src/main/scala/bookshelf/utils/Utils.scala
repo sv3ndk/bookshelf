@@ -116,19 +116,14 @@ object validation {
 object core {
 
   import org.log4s._
-  private[this] val logger = getLogger
+  private val logger = getLogger
 
   class TechnicalError(err: String) extends RuntimeException
 
-  def makeId[A](implicit ev: Refined[String, Uuid] =:= A): Either[TechnicalError, A] =
-    refineV[Uuid](java.util.UUID.randomUUID().toString())
-      .fold(
-        err => {
-          logger.error("should never happened: generated an invalid UUID, this is a BUG :(")
-          Left(new TechnicalError(err))
-        },
-        a => Right(a)
-      )
+  def makeId[A](implicit ev: Refined[String, Uuid] =:= A): A = {
+    val Right(id) = refineV[Uuid](java.util.UUID.randomUUID().toString())
+    id
+  }
 }
 
 object logging {

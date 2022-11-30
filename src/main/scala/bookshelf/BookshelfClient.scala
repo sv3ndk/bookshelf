@@ -23,12 +23,14 @@ import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.headers._
 import org.http4s.implicits._
 import org.log4s._
+import org.http4s.Response
 
 trait BookshelfClient {
   def getCategory(name: CategoryName): IO[Category]
   def getAllCategories: IO[List[Category]]
   def createCategory(createCategory: CreateCategory): IO[CategoryId]
   def getAuthor(id: AuthorId): IO[Author]
+  def getAuthorRaw(id: AuthorId): Resource[IO, Response[IO]]
   def getAllAuthors: IO[List[Author]]
   def createAuthor(createAuthor: CreateAuthor): IO[AuthorId]
   def getBook(id: BookId): IO[Book]
@@ -37,6 +39,8 @@ trait BookshelfClient {
 
 object BookshelfClient {
   implicit private val logger = getLogger
+
+  case class FailedResponse(response: Response[IO]) extends RuntimeException
 
   def build(baseUri: Uri): Resource[IO, BookshelfClient] =
     EmberClientBuilder
@@ -64,7 +68,13 @@ object BookshelfClient {
 
     def getAuthor(id: AuthorId) =
       IO(logger.info(s"fetching author $id")) >>
-        httpClient.expect[Author](GET(catalogUri / "author" +? ("id", id.value))).debug
+        httpClient
+          .expect[Author](GET(catalogUri / "author" +? ("id", id.value)))
+          .debug
+
+    def getAuthorRaw(id: AuthorId) =
+      // IO(logger.info(s"fetching author $id")) >>
+      httpClient.run(GET(catalogUri / "author" +? ("id", id.value)))
 
     val getAllAuthors =
       IO(logger.info(s"fetching all authors")) >>

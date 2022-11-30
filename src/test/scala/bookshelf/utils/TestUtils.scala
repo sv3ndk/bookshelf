@@ -11,12 +11,7 @@ trait TestUtils {
 
   self: CatsEffectAssertions with Assertions =>
 
-  def bodyAsText(body: fs2.Stream[IO, Byte]): IO[String] =
-    body
-      .through(fs2.text.utf8.decode)
-      .compile
-      .toList
-      .map(_.mkString)
+  def bodyAsText(body: fs2.Stream[IO, String]): IO[String] = body.compile.toList.map(_.mkString("\n"))
 
   def assertResponse[A](tested: IO[Response[IO]], expectedStatus: Status, expectedBody: A)(implicit
       decoder: EntityDecoder[IO, A]
@@ -26,7 +21,7 @@ trait TestUtils {
         response.status match {
           case `expectedStatus` => response.as[A].assertEquals(expectedBody)
           case unexpectedStatus =>
-            bodyAsText(response.body).flatMap(body =>
+            bodyAsText(response.bodyText).flatMap(body =>
               IO.raiseError(new RuntimeException(s"unexpected service error during test: $unexpectedStatus, $body }"))
             )
         }
@@ -34,10 +29,10 @@ trait TestUtils {
 
   def assertFailedResponse[A](tested: IO[Response[IO]], expectedStatus: Status, expectedBody: String): IO[Unit] =
     tested.map(_.status).assertEquals(expectedStatus) *>
-      tested.flatMap(response => bodyAsText(response.body)).assertEquals(expectedBody)
+      tested.flatMap(response => bodyAsText(response.bodyText)).assertEquals(expectedBody)
 
   def assertFailedResponse[A](tested: Response[IO], expectedStatus: Status, expectedBody: String): IO[Unit] =
     IO.pure(tested.status).assertEquals(expectedStatus) *>
-      assertIO(bodyAsText(tested.body), expectedBody)
+      assertIO(bodyAsText(tested.bodyText), expectedBody)
 
 }

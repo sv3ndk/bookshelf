@@ -9,6 +9,7 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import doobie._
 import doobie.implicits._
+import doobie.postgres._
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.api.Validate
@@ -25,8 +26,15 @@ object CategoriesDb extends doobie.refined.Instances {
     SQL.getByName(name).option
   def getAll: ConnectionIO[List[Category]] =
     SQL.getAll.to[List]
-  def create(id: CategoryId, createCategory: CreateCategory): ConnectionIO[CategoryId] =
-    SQL.create(id, createCategory).run.as(id)
+  def create(
+      id: CategoryId,
+      createCategory: CreateCategory
+  ): ConnectionIO[Either[CategoryAlreadyExists.type, CategoryId]] =
+    SQL
+      .create(id, createCategory)
+      .run
+      .attemptSomeSqlState { case sqlstate.class23.UNIQUE_VIOLATION => CategoryAlreadyExists }
+      .map(_.map(_ => id))
 
   object SQL {
 

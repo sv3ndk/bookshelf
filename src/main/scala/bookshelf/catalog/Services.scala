@@ -6,6 +6,8 @@ import cats.effect.IO
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
+import cats.effect.syntax.all._
+
 import doobie._
 import doobie.implicits._
 import eu.timepit.refined._
@@ -20,7 +22,9 @@ import eu.timepit.refined.string._
 trait Categories {
   def get(name: Categories.CategoryName): IO[Option[Categories.Category]]
   def getAll: IO[List[Categories.Category]]
-  def create(category: Categories.CreateCategory): IO[Categories.CategoryId]
+  def create(
+      category: Categories.CreateCategory
+  ): IO[Either[Categories.CategoryAlreadyExists.type, Categories.CategoryId]]
 }
 
 object Categories {
@@ -34,12 +38,18 @@ object Categories {
   case class CreateCategory(name: CategoryName, description: CategoryDescription)
   case class Category(id: CategoryId, name: CategoryName, description: CategoryDescription)
 
+  // "ADT" with one single possible busines error in case of category creation
+  // (would normally be an enum or sealed trait)
+
+  case object CategoryAlreadyExists
+
   def make(xa: Transactor[IO]) = new Categories {
     def get(name: CategoryName) = CategoriesDb.get(name).transact(xa)
     def getAll = CategoriesDb.getAll.transact(xa)
     def create(category: CreateCategory) =
-      IO.fromEither(makeId[CategoryId])
+      IO(makeId[CategoryId])
         .flatMap(id => CategoriesDb.create(id, category).transact(xa))
+
   }
 }
 
@@ -61,7 +71,7 @@ object Authors {
     def get(id: AuthorId): IO[Option[Authors.Author]] = AuthorsDb.get(id).transact(xa)
     def getAll: IO[List[Author]] = AuthorsDb.getAll.transact(xa)
     def create(createAuthor: Authors.CreateAuthor) =
-      IO.fromEither(makeId[AuthorId])
+      IO(makeId[AuthorId])
         .flatMap(id => AuthorsDb.create(id, createAuthor).transact(xa))
   }
 }
@@ -98,7 +108,7 @@ object Books {
   def make(xa: Transactor[IO]) = new Books {
     def get(id: BookId): IO[Option[Book]] = BooksDb.get(id).transact(xa)
     def create(createBook: Books.CreateBook) =
-      IO.fromEither(makeId[BookId])
+      IO(makeId[BookId])
         .flatMap(id => BooksDb.create(id, createBook).transact(xa))
   }
 
