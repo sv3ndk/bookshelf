@@ -26,13 +26,13 @@ import munit.FunSuite
 import munit.ScalaCheckEffectSuite
 import org.http4s.EntityEncoder
 import org.http4s.MediaType
-import org.http4s.Status
 import org.http4s.Method._
-import org.http4s.Method
 import org.http4s.Request
+import org.http4s.Status
 import org.http4s.Uri
 import org.http4s.circe.CirceEntityCodec._
 import org.http4s.client.Client
+import org.http4s.client.UnexpectedStatus
 import org.http4s.client.dsl.io._
 import org.http4s.ember.client.EmberClientBuilder
 import org.http4s.headers._
@@ -43,7 +43,6 @@ import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.containers.wait.strategy.WaitStrategy
 
 import java.io.File
-import org.http4s.client.UnexpectedStatus
 
 class CatalogIntegration extends CatsEffectSuite with DockerComposeIntegrationTests {
 
